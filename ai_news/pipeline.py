@@ -227,9 +227,11 @@ class Pipeline:
     def run(self, limit: int = 5, sources: list[str] | None = None, dry_run: bool = False,
             skip_llm: bool = False) -> dict:
         stats = {"fetched_new": 0, "processed": 0, "skipped": 0, "deferred": 0, "ready": 0, "published": 0, "failed": 0}
-        new_ids = self.crawl(sources)
-        stats["fetched_new"] = len(new_ids)
-        for item_id in new_ids[:limit]:
+        self.crawl(sources)
+        # 处理对象 = 尚未生成草稿的条目（含本轮新抓 + 历史遗留 + deferred 重试）
+        todo = [i["id"] for i in self.db.get_new_items(limit + 50, sources)]
+        stats["fetched_new"] = len(todo)
+        for item_id in todo[:limit]:
             res = self.process_item(item_id, dry_run=dry_run, skip_llm=skip_llm)
             if not res:
                 continue

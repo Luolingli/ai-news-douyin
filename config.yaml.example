@@ -38,6 +38,89 @@ sources:
     enabled: false
     max_items: 50
 
+# ===== 内容源（多源并行，自动去重；全部为免登录可用源）=====
+sources:
+  - type: rss
+    name: openai_news
+    url: https://openai.com/news/rss.xml
+    enabled: true
+    max_items: 10
+
+  - type: rss
+    name: hf_blog
+    url: https://huggingface.co/blog/feed.xml
+    enabled: true
+    max_items: 10
+
+  - type: rss
+    name: deepmind_blog
+    url: https://deepmind.google/blog/rss.xml
+    enabled: true
+    max_items: 10
+
+  - type: rss
+    name: techcrunch_ai
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+    enabled: true
+    max_items: 15
+
+  - type: rss
+    name: venturebeat_ai
+    url: https://venturebeat.com/category/ai/feed/
+    enabled: true
+    max_items: 15
+
+  - type: rss
+    name: nvidia_blog
+    url: https://blogs.nvidia.com/feed/
+    enabled: true
+    max_items: 10
+
+  - type: rss
+    name: mit_tr
+    url: https://www.technologyreview.com/feed/
+    enabled: true
+    max_items: 10
+
+  - type: rss
+    name: verge_ai
+    url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+    enabled: true
+    max_items: 10
+
+  - type: rss
+    name: qbitai
+    url: https://www.qbitai.com/feed
+    enabled: true
+    max_items: 10
+
+  - type: googlenews
+    name: google_ai
+    query: '"OpenAI" OR "Anthropic" OR "Google DeepMind" OR "Meta AI" OR "AI 融资" OR "大模型"'
+    lang: en-US
+    enabled: true
+    max_items: 15
+
+  - type: tme
+    name: tg_ai_news
+    channel: AI_News_Official
+    enabled: true
+    max_items: 10
+
+  - type: rsshub_twitter
+    name: twitter_via_rsshub
+    base_url: http://localhost:1200
+    accounts: [OpenAI, AnthropicAI, GoogleDeepMind, MetaAI, karpathy, AndrewYNg]
+    enabled: false
+    max_items: 30
+
+  - type: twitter_x
+    name: twitter_x
+    accounts: [OpenAI, AnthropicAI]
+    cookies_path: ""
+    enabled: false
+    max_items: 30
+
 # ===== 内容检测 =====
 detection:
   relevance:
@@ -57,24 +140,3 @@ llm:
   max_title_len: 30            # 标题最大字数
   max_body_len: 350            # 正文最大字数
   max_hashtags: 5
-
-# ===== 图文媒体 =====
-media:
-  cover:
-    enabled: true              # 生成封面卡（1080x1440），保证图文至少 1 张图
-    gradient: ["#0f2027", "#203a43", "#2c5364"]
-    font_size: 72
-  download_images: true        # 下载原文配图（最多 9 张，总数含封面）
-  max_images: 9
-
-# ===== 抖音发布 =====
-douyin:
-  mode: auto                 # auto=有API凭据用API，否则用网页版 | api=仅开放平台API | web=仅网页版自动化
-  api_style: auto            # auto=自动探测 | modern=/api/douyin/v1/image/* | legacy=/api/douyin/v1/video/*
-  scope: "user_info,video.create"
-  text_prefix: ""              # 可选，发布文案前缀（如 @xxx ）
-  dry_run: false               # 全局试跑开关（只生成不发布）
-  web:
-    cookies_path: ""          # 留空自动找 ~/.config/douyin_keepalive/cookies.json
-    headless: false            # 首次运行建议 false，可看到浏览器操作
-    timeout: 90000             # 页面加载超时(ms)

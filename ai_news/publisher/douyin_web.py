@@ -325,7 +325,8 @@ class DouyinWebPublisher:
                 body = page.locator("body").inner_text(timeout=3000)
             except Exception:
                 body = ""
-            if "发布成功" in body or "作品已发布" in body or "上传成功" in body or "内容管理" in url:
+            if ("发布成功" in body or "作品已发布" in body or "上传成功" in body
+                    or "内容管理" in body or "content/manage" in url or "manage" in url):
                 m = re.search(r"aweme_id[=/](\d+)|item_id[=/](\d+)", url)
                 result["item_id"] = m.group(1) if m else ""
                 result["message"] = "发布成功"
