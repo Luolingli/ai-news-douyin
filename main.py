@@ -203,6 +203,8 @@ def cmd_douyin_web(args) -> int:
     web_cfg["screenshot_dir"] = str(Path(get(cfg, "data_dir", "data")) / "logs" / "screenshots")
     pub = DouyinWebPublisher(web_cfg)
     if web_action == "login":
+        print("⚠️  注意：抖音一个账号只有一个有效网页会话，本次扫码会踢掉该账号的所有旧网页会话！", file=sys.stderr)
+        print("   若 DouYinSparkFlow（聊天续火）也在运行，其 cookies 将失效；扫码完成后需重新同步 cookies 给它。", file=sys.stderr)
         res = pub.login_interactive(wait_minutes=5)
         print(res)
     elif web_action == "try":
