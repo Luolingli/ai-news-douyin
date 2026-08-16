@@ -156,8 +156,15 @@ class Pipeline:
                                        int(llm_cfg.get("max_title_len", 30)),
                                        int(llm_cfg.get("max_body_len", 350)))
 
-        title = str(result.get("title") or "").strip()[: int(llm_cfg.get("max_title_len", 30))]
-        body = str(result.get("body") or "").strip()[: int(llm_cfg.get("max_body_len", 350))]
+        title_raw = str(result.get("title") or "").strip()
+        title = title_raw[: int(llm_cfg.get("max_title_len", 20))]
+        # 智能截断：若在中文词中间切断（前后都是汉字），去掉残字，避免「…安全担」
+        if len(title_raw) > len(title) and len(title) >= 2:
+            last, prev = title[-1], title[-2]
+            nxt = title_raw[len(title)] if len(title_raw) > len(title) else ""
+            if all("\u4e00" <= ch <= "\u9fff" for ch in (last, prev, nxt)):
+                title = title[:-1]
+        body = str(result.get("body") or "").strip()[: int(llm_cfg.get("max_body_len", 500))]
         hashtags = sanitize_hashtags(result.get("hashtags"), int(llm_cfg.get("max_hashtags", 5)))
         if not title and not body:
             # 空输出多为限流假象，延期到下轮重试
