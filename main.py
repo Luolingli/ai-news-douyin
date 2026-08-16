@@ -183,7 +183,6 @@ def cmd_douyin_tokens(args) -> int:
 
 def cmd_douyin_web(args) -> int:
     """网页版发布器：login=扫码登录保存cookies；check=检查登录态"""
-    from ai_news.publisher.cookies import find_cookies_path
     from ai_news.publisher.douyin_web import DouyinWebPublisher
 
     cfg, db, _ = _load()
