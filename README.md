@@ -56,7 +56,12 @@ tests/                      # 离线测试（python tests/run_all.py）
 1. **内容源**：编辑 `config.yaml`，详见 [docs/content_sources.md](docs/content_sources.md)（默认已启用 Telegram 频道 + Google News，开箱即可跑）
 2. **DeepSeek**：`.env` 填 `DEEPSEEK_API_KEY`（https://platform.deepseek.com 创建）
 3. **抖音发布**：个人账号走网页版路线（推荐）——`python main.py douyin web login` 扫码一次，之后自动复用 keepalive cookies；有企业资质可走 API 路线，见 [docs/douyin_open_platform_setup.md](docs/douyin_open_platform_setup.md)
-4. **定时运行**：本地 `loop` / crontab；或把仓库推到 GitHub，配置 secrets 后启用 `auto_run.yml`
+4. **定时运行**（二选一）：
+   - **GitHub Actions 云端自动**（推荐）：在仓库 Settings → Secrets and variables → Actions 配置 `DOUYIN_WEB_COOKIES_B64`（本地 `data/web_cookies.json` 的 base64，命令见下）和 `DEEPSEEK_API_KEY`，可选 `AI_NEWS_PAT`（cookies 自动回写续期）。之后每 4 小时自动抓取+发布，无需开电脑：
+     ```bash
+     base64 -i data/web_cookies.json | tr -d '\n'   # macOS 生成 secret 值
+     ```
+   - **本地无人值守**：`python main.py loop --interval 14400` 或 macOS launchd / crontab 定时
 
 ## 运行测试
 

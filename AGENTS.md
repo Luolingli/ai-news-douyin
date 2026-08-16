@@ -4,7 +4,7 @@
 
 ## 1. 项目是什么
 
-AI 新闻自动搬运流水线：抓取（Telegram 频道 / Google News / RSSHub-Twitter / X 直抓）→ 内容检测（AI 相关性、敏感过滤、去重）→ DeepSeek 总结 → 封面生成 → 抖音开放平台图文发布。支持本地 `loop` 定时和 GitHub Actions 云端定时。
+AI 新闻自动搬运流水线：抓取（Telegram 频道 / Google News / RSSHub-Twitter / X 直抓）→ 内容检测（AI 相关性、敏感过滤、去重）→ DeepSeek 总结 → 封面生成 → 抖音开放平台图文发布。支持本地 `loop`/launchd 定时和 GitHub Actions 云端定时（云端走网页版发布：secret 里放 `DOUYIN_WEB_COOKIES_B64`，工作流解码→无头发布→回写 cookies）。
 
 ## 2. 关键入口
 

@@ -55,6 +55,21 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
+def _apply_env_overrides(cfg: dict) -> dict:
+    """环境变量覆盖（供 GitHub Actions 等云端部署用）"""
+    import os
+
+    if os.environ.get("DOUYIN_MODE"):
+        cfg.setdefault("douyin", {})["mode"] = os.environ["DOUYIN_MODE"]
+    if os.environ.get("DOUYIN_WEB_HEADLESS"):
+        cfg.setdefault("douyin", {}).setdefault("web", {})["headless"] = (
+            os.environ["DOUYIN_WEB_HEADLESS"].lower() in ("1", "true", "yes")
+        )
+    if os.environ.get("DOUYIN_WEB_COOKIES"):
+        cfg.setdefault("douyin", {}).setdefault("web", {})["cookies_path"] = os.environ["DOUYIN_WEB_COOKIES"]
+    return cfg
+
+
 def load_config(config_path: str | None = None) -> dict:
     _load_dotenv(PROJECT_ROOT / ".env")
     path = Path(config_path) if config_path else Path(os.environ.get("AI_NEWS_CONFIG", PROJECT_ROOT / "config.yaml"))
@@ -62,7 +77,7 @@ def load_config(config_path: str | None = None) -> dict:
         raise FileNotFoundError(f"配置文件不存在: {path}（复制 config.yaml.example 为 config.yaml 并修改）")
     with open(path, encoding="utf-8") as f:
         user_cfg = yaml.safe_load(f) or {}
-    return _deep_merge(DEFAULTS, user_cfg)
+    return _apply_env_overrides(_deep_merge(DEFAULTS, user_cfg))
 
 
 def get(cfg: dict, dotted: str, default: Any = None) -> Any:

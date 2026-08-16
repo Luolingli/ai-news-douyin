@@ -1,8 +1,10 @@
+# AI 新闻自动搬运（云端）
+# 个人账号网页版路线：cookies 从 secret 解码 → Playwright 无头浏览器发布图文 → 成功后回写最新 cookies
 name: AI News Auto Run
 
 on:
   schedule:
-    - cron: "0 */4 * * *"   # 每 4 小时跑一轮（北京时间 08:00/12:00/16:00/20:00/00:00/04:00）
+    - cron: "0 */4 * * *"   # 每 4 小时（北京时间 08/12/16/20/00/04 点）
   workflow_dispatch: {}
 
 jobs:
@@ -14,31 +16,59 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+
+      - name: Cache playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-v1
 
       - name: Install dependencies
         run: |
-          pip install -q -r requirements.txt
-          # 封面图需要中文字体
-          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+          pip install -q -r requirements.txt playwright
+          python -m playwright install --with-deps chromium
+          sudo apt-get install -y -qq fonts-noto-cjk
+
+      - name: Prepare config and cookies
+        run: |
+          cp config.yaml.example config.yaml
+          mkdir -p data
+          echo "$DOUYIN_WEB_COOKIES_B64" | tr -d '\n' | base64 -d > data/web_cookies.json
+          echo "cookies bytes: $(wc -c < data/web_cookies.json)"
+        env:
+          DOUYIN_WEB_COOKIES_B64: ${{ secrets.DOUYIN_WEB_COOKIES_B64 }}
 
       - name: Run pipeline
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DOUYIN_CLIENT_KEY: ${{ secrets.DOUYIN_CLIENT_KEY }}
-          DOUYIN_CLIENT_SECRET: ${{ secrets.DOUYIN_CLIENT_SECRET }}
-          DOUYIN_ACCESS_TOKEN: ${{ secrets.DOUYIN_ACCESS_TOKEN }}
-          DOUYIN_REFRESH_TOKEN: ${{ secrets.DOUYIN_REFRESH_TOKEN }}
-          DOUYIN_OPEN_ID: ${{ secrets.DOUYIN_OPEN_ID }}
-          GH_WRITEBACK_REPO: ${{ github.repository }}
-          GH_WRITEBACK_TOKEN: ${{ secrets.AI_NEWS_PAT }}
+          DOUYIN_MODE: web
+          DOUYIN_WEB_HEADLESS: "1"
         run: python main.py run --limit 5
 
-      - name: Renew refresh token (always)
+      - name: Upload debug logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-logs
+          path: |
+            data/logs/screenshots/
+            data/logs/app.log
+
+      - name: Refresh cookies back to secret
         if: always()
         env:
-          DOUYIN_CLIENT_KEY: ${{ secrets.DOUYIN_CLIENT_KEY }}
-          DOUYIN_CLIENT_SECRET: ${{ secrets.DOUYIN_CLIENT_SECRET }}
-          DOUYIN_REFRESH_TOKEN: ${{ secrets.DOUYIN_REFRESH_TOKEN }}
-          GH_WRITEBACK_REPO: ${{ github.repository }}
-          GH_WRITEBACK_TOKEN: ${{ secrets.AI_NEWS_PAT }}
-        run: python main.py douyin renew || echo "renew failed (may not need yet)"
+          GH_TOKEN: ${{ secrets.AI_NEWS_PAT }}
+          DOUYIN_WEB_COOKIES_B64: ${{ secrets.DOUYIN_WEB_COOKIES_B64 }}
+        run: |
+          if [ -f data/web_cookies.json ] && [ -n "$GH_TOKEN" ]; then
+            B64=$(base64 -w0 data/web_cookies.json)
+            if [ "$B64" != "$DOUYIN_WEB_COOKIES_B64" ]; then
+              gh secret set DOUYIN_WEB_COOKIES_B64 --repo ${{ github.repository }} --body "$B64"
+              echo "cookies refreshed and written back"
+            else
+              echo "cookies unchanged"
+            fi
+          else
+            echo "skip writeback (no PAT or no cookie file)"
+          fi
