@@ -182,13 +182,44 @@ class DouyinWebPublisher:
                 browser.close()
         return result
 
+    # ---------- 试发布（不点发布按钮） ----------
+    def upload_only(self, image_paths: list[str], text: str) -> dict:
+        """验证上传流程：切图文页签→传图→填描述→加话题，然后停住（不点发布）"""
+        from playwright.sync_api import sync_playwright
+
+        result: dict = {"ok": False, "message": ""}
+        with sync_playwright() as p:
+            browser, ctx = self._new_context(p)
+            try:
+                page = ctx.new_page()
+                page.goto(UPLOAD_URL, wait_until="domcontentloaded", timeout=self.timeout)
+                page.wait_for_timeout(6000)
+                if not self._is_logged_in(page):
+                    self._snapshot(page, "try_not_login")
+                    raise RuntimeError("未登录或 cookies 失效，请先执行: python main.py douyin web login")
+                self._click_image_tab(page)
+                self._upload_images(page, image_paths)
+                self._fill_description(page, text)
+                self._add_topics(page, text)
+                self._snapshot(page, "try_ready")
+                result["ok"] = True
+                result["message"] = "上传与文案填写完成（未点发布），见截图 try_ready.png"
+                log.info("试发布完成（未点发布按钮）")
+            except Exception as e:
+                self._snapshot(page, "try_failed")
+                result["message"] = str(e)[:300]
+                log.error("试发布失败: %s", e)
+            finally:
+                browser.close()
+        return result
+
     # ---------- 各步骤（防御式选择器） ----------
     def _click_image_tab(self, page) -> None:
         """切换到「图文」上传页签"""
         attempts = [
-            lambda: page.locator("[role=tab]").filter(has_text=TAB_图文).first.click(timeout=8000),
-            lambda: page.get_by_text("图文", exact=True).first.click(timeout=8000),
-            lambda: page.locator(".semi-tabs-tab").filter(has_text=TAB_图文).first.click(timeout=8000),
+            lambda: page.locator("[class*=tab-item]").filter(has_text=re.compile(r"^发布图文$")).first.click(timeout=8000),
+            lambda: page.locator("[class*=tab]").filter(has_text=re.compile(r"^发布图文$")).first.click(timeout=8000),
+            lambda: page.get_by_text("发布图文", exact=True).first.click(timeout=8000),
         ]
         last_err = None
         for fn in attempts:
@@ -233,32 +264,32 @@ class DouyinWebPublisher:
         raise RuntimeError("等待图片上传完成超时")
 
     def _fill_description(self, page, text: str) -> None:
-        tarea = page.locator("textarea").first
-        tarea.wait_for(state="visible", timeout=15000)
-        tarea.click()
-        tarea.fill(text)
-        page.wait_for_timeout(500)
-        log.info("描述已填写（%d 字）", len(text))
-
+        """填写标题输入框 + 正文（contenteditable，输入 # 会自动变成话题标签）"""
+        title, _, rest = text.partition(chr(10) * 2)
+        # 标题输入框
+        title_inp = page.locator("input[placeholder='添加作品标题']").first
+        if title_inp.count() > 0 and title_inp.is_visible():
+            title_inp.click()
+            title_inp.fill(title[:50])
+            log.info("标题已填写: %s", title[:30])
+        # 正文（含 #话题）
+        ce = page.locator("[contenteditable=true]").first
+        ce.wait_for(state="visible", timeout=15000)
+        ce.click()
+        page.keyboard.type(rest or title, delay=3)
+        page.wait_for_timeout(800)
+        log.info("正文已填写（%d 字）", len(rest or title))
     def _add_topics(self, page, text: str) -> None:
-        """尽力加话题：点「添加话题」输入并回车；失败不阻断发布"""
-        tags = re.findall(r"#([\w\u4e00-\u9fff]+)", text)
+        """话题已在正文中通过 # 自动转为标签；这里校验数量并记录（失败不阻断）"""
+        tags = re.findall(r"#([\w一-鿿]+)", text)
         if not tags:
             return
         try:
-            add = page.get_by_text("添加话题", exact=True).first
-            if add.count() == 0:
-                return
-            for tag in tags[:5]:
-                add.click(timeout=5000)
-                inp = page.locator("input[placeholder*=话题], [class*=topic] input").first
-                inp.fill(tag)
-                inp.press("Enter")
-                page.wait_for_timeout(800)
-            log.info("已添加话题: %s", ", ".join(tags[:5]))
+            chips = page.locator("[class*=tag-hash-view-name]")
+            page.wait_for_timeout(1500)
+            log.info("话题标签已生效 %d/%d: %s", chips.count(), len(tags[:5]), ", ".join(tags[:5]))
         except Exception as e:
-            log.warning("话题添加失败（不影响发布）: %s", e)
-
+            log.warning("话题校验失败（不影响发布）: %s", e)
     def _click_publish(self, page) -> None:
         """点击发布按钮（含二次确认弹窗）"""
         attempts = [

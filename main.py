@@ -181,30 +181,82 @@ def cmd_douyin_tokens(args) -> int:
     return 0
 
 
+def pub_try_text(cfg: dict, post: dict, tags: list[str]) -> str:
+    prefix = (get(cfg, "douyin.text_prefix", "") or "")
+    parts = [prefix, post.get("title", ""), "", post.get("body", "")]
+    if tags:
+        parts += ["", " ".join("#" + t for t in tags)]
+    return "\n".join(p for p in parts if p or p == "" or p is None)[:1000]
+
+
 def cmd_douyin_web(args) -> int:
-    """网页版发布器：login=扫码登录保存cookies；check=检查登录态"""
+    """网页版发布器：login=扫码登录；check=检查登录态；try=试发布（不点发布）；publish=发布指定草稿"""
     from ai_news.publisher.douyin_web import DouyinWebPublisher
 
     cfg, db, _ = _load()
     web_action = (args.code or "check").strip().lower()
+    post_id = int(args.post_id) if getattr(args, "post_id", "") else 0
     web_cfg = dict(get(cfg, "douyin.web", {}))
     if args.headless:
         web_cfg["headless"] = True
+    web_cfg["data_dir"] = str(Path(get(cfg, "data_dir", "data")))
     web_cfg["screenshot_dir"] = str(Path(get(cfg, "data_dir", "data")) / "logs" / "screenshots")
     pub = DouyinWebPublisher(web_cfg)
     if web_action == "login":
         res = pub.login_interactive(wait_minutes=5)
         print(res)
+    elif web_action == "try":
+        if not post_id:
+            print("用法: python main.py douyin web try --post-id <ID>  （先 python main.py drafts 看 ID）", file=sys.stderr)
+            db.close()
+            return 1
+        all_posts = db.get_posts(status=None, limit=1000)
+        post = next((p for p in all_posts if p["id"] == post_id), None)
+        if not post:
+            print(f"找不到草稿 {post_id}", file=sys.stderr)
+            db.close()
+            return 1
+        import json as _json
+        images = _json.loads(post.get("images") or "[]")
+        tags = _json.loads(post.get("hashtags") or "[]")
+        text = pub_try_text(cfg, post, tags)
+        res = pub.upload_only(images, text)
+        print(res)
+    elif web_action == "publish":
+        if not post_id:
+            print("用法: python main.py douyin web publish --post-id <ID>", file=sys.stderr)
+            db.close()
+            return 1
+        import json as _json
+        from datetime import datetime, timezone
+        ready_posts = db.get_posts("ready", limit=1000)
+        post = next((p for p in ready_posts if p["id"] == post_id), None)
+        if not post:
+            print(f"找不到 ready 草稿 {post_id}", file=sys.stderr)
+            db.close()
+            return 1
+        images = _json.loads(post.get("images") or "[]")
+        tags = _json.loads(post.get("hashtags") or "[]")
+        text = pub_try_text(cfg, post, tags)
+        r = pub.publish(images, text, dry_run=False)
+        print(r)
+        if r.get("ok"):
+            db.update_post(post_id, status="published", douyin_item_id=r.get("item_id", ""),
+                           published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        else:
+            db.update_post(post_id, status="failed", error=r.get("message", "")[:500])
     else:
         res = pub.check_login()
         if res["logged_in"]:
             print(f"登录正常：{res['account'] or '账号已登录'} | {res['url'][:80]}")
         else:
-            print(f"未登录（cookies 失效）：{res['url'][:80]}\n请执行: python main.py douyin web login")
+            print(f"未登录（cookies 失效）：{res['url'][:80]}")
+            print("请执行: python main.py douyin web login")
         db.close()
         return 0 if res["logged_in"] else 1
     db.close()
     return 0 if res.get("ok") else 1
+
 
 def cmd_douyin_whoami(args) -> int:
     cfg, db, _ = _load()
@@ -275,6 +327,7 @@ def main() -> int:
     p.add_argument("--gh", action="store_true", help="tokens 直接写入 GitHub secrets")
     p.add_argument("--repo", default="", help="tokens --gh 时指定 owner/repo")
     p.add_argument("--headless", action="store_true", help="web 子命令无头模式（不弹窗）")
+    p.add_argument("--post-id", default="", help="web try/publish 时指定草稿 ID")
     p.set_defaults(fn=lambda a: {"auth": cmd_douyin_auth, "callback": cmd_douyin_callback,
                                 "whoami": cmd_douyin_whoami, "renew": cmd_douyin_renew,
                                 "tokens": cmd_douyin_tokens, "web": cmd_douyin_web}[a.action](a))
