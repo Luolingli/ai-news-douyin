@@ -231,10 +231,10 @@ def cmd_douyin_web(args) -> int:
             return 1
         import json as _json
         from datetime import datetime, timezone
-        ready_posts = db.get_posts("ready", limit=1000)
-        post = next((p for p in ready_posts if p["id"] == post_id), None)
+        all_posts = db.get_posts(status=None, limit=1000)
+        post = next((p for p in all_posts if p["id"] == post_id and p["status"] in ("ready", "failed")), None)
         if not post:
-            print(f"找不到 ready 草稿 {post_id}", file=sys.stderr)
+            print(f"找不到可发布的草稿 {post_id}（需 ready 或 failed 状态）", file=sys.stderr)
             db.close()
             return 1
         images = _json.loads(post.get("images") or "[]")
@@ -242,13 +242,14 @@ def cmd_douyin_web(args) -> int:
         text = pub_try_text(cfg, post, tags)
         r = pub.publish(images, text, dry_run=False)
         print(r)
-        db.close()
         if r.get("ok"):
             db.update_post(post_id, status="published", douyin_item_id=r.get("item_id", ""),
-                           published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
-            return 0
-        db.update_post(post_id, status="failed", error=r.get("message", "")[:500])
-        return 1
+                           published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                           error=r.get("message", "")[:200])
+        else:
+            db.update_post(post_id, status="failed", error=r.get("message", "")[:500])
+        db.close()
+        return 0 if r.get("ok") else 1
     else:
         res = pub.check_login()
         if res["logged_in"]:

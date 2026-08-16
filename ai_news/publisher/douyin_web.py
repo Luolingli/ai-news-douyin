@@ -171,7 +171,7 @@ class DouyinWebPublisher:
                 self._add_topics(page, text)
                 self._click_publish(page)
                 ok = self._verify_success(page, result)
-                if ok and result.get("message") == "发布成功" and self.cookies_path:
+                if ok and self.cookies_path:
                     save_cookies(ctx.cookies(), self.cookies_path)
                 result["ok"] = ok
             except Exception as e:
@@ -315,23 +315,56 @@ class DouyinWebPublisher:
                 last_err = e
         raise RuntimeError(f"找不到发布按钮: {last_err}")
 
+    ERROR_MARKERS = ["发布失败", "发布不成功", "系统开小差", "系统繁忙", "网络开小差",
+                     "网络异常", "上传失败", "操作失败", "请稍后重试", "请重试", "服务异常"]
+    SUCCESS_MARKERS = ["发布成功", "作品已发布", "发布完成"]
+
     def _verify_success(self, page, result: dict) -> bool:
-        """等待发布结果：URL 跳转 / 成功提示"""
+        """等待发布结果：错误提示优先；成功只看明确 toast；跳转管理页后再观察 15s 防延迟弹错"""
         deadline = time.time() + 90
-        while time.time() < deadline:
+        jumped_at: float | None = None
+        while True:
             page.wait_for_timeout(3000)
             url = page.url
             try:
                 body = page.locator("body").inner_text(timeout=3000)
             except Exception:
                 body = ""
-            if ("发布成功" in body or "作品已发布" in body or "上传成功" in body
-                    or "内容管理" in body or "content/manage" in url or "manage" in url):
-                m = re.search(r"aweme_id[=/](\d+)|item_id[=/](\d+)", url)
-                result["item_id"] = m.group(1) if m else ""
-                result["message"] = "发布成功"
-                self._snapshot(page, "publish_ok")
-                return True
+            # 0) 人机验证弹窗（summon.bytedance.com）→ 立即停止，不要重试
+            if "summon.bytedance.com" in (f.url for f in page.frames) or (
+                "验证" in body and "取消" in body and page.locator("[role=dialog]").count() > 0
+            ):
+                result["message"] = "触发抖音安全验证（人机验证），自动化无法通过，请人工在浏览器中完成验证后重试"
+                self._snapshot(page, "publish_verify_wall")
+                return False
+            # 1) 错误提示优先（红色 toast：发布失败/系统开小差等）
+            for m in self.ERROR_MARKERS:
+                if m in body:
+                    result["message"] = f"发布失败提示: {m}"
+                    self._snapshot(page, "publish_failed_toast")
+                    return False
+            # 2) 明确的成功 toast
+            for m in self.SUCCESS_MARKERS:
+                if m in body:
+                    m2 = re.search(r"aweme_id[=/](\d+)|item_id[=/](\d+)", url)
+                    result["item_id"] = m2.group(1) if m2 else ""
+                    result["message"] = "发布成功"
+                    self._snapshot(page, "publish_ok")
+                    return True
+            # 3) 跳转到内容管理页：连续 15s 无失败提示才算成功（防延迟弹错）
+            if "content/manage" in url:
+                if jumped_at is None:
+                    jumped_at = time.time()
+                elif time.time() - jumped_at >= 15:
+                    result["message"] = "已跳转内容管理页且 15s 无失败提示（建议抽查）"
+                    self._snapshot(page, "publish_ok")
+                    return True
+            else:
+                jumped_at = None
+            if time.time() > deadline:
+                break
+        # 超时未确认 → 诚实报告失败，不假装成功
         self._snapshot(page, "publish_unknown")
-        result["message"] = f"已点击发布但未确认成功（当前URL: {page.url[:120]}），请到创作者中心-内容管理查看"
-        return True  # 视为已提交，交由人工确认
+        result["message"] = (f"未能确认发布结果（URL: {page.url[:120]}），请人工检查；"
+                             "可重试: python main.py douyin web publish --post-id <ID>")
+        return False

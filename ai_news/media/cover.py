@@ -125,3 +125,74 @@ def generate_cover(title: str, source: str, date_str: str, out_path: str | Path,
     except Exception as e:
         log.warning("封面生成失败: %s", e)
         return False
+
+
+def overlay_on_image(title: str, source: str, date_str: str, bg_path: str,
+                     out_path: str | Path, cfg_cover: dict | None = None) -> bool:
+    """AI 底图上叠加标题/来源/日期，生成最终封面（1080x1440）"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+    except ImportError:
+        log.warning("未安装 Pillow，跳过封面叠加")
+        return False
+
+    cfg_cover = cfg_cover or {}
+    try:
+        # 1) 底图 cover 缩放（填满 1080x1440 后居中裁剪）
+        bg = Image.open(bg_path).convert("RGB")
+        scale = max(WIDTH / bg.width, HEIGHT / bg.height)
+        bg = bg.resize((int(bg.width * scale), int(bg.height * scale)), Image.LANCZOS)
+        left = (bg.width - WIDTH) // 2
+        top = (bg.height - HEIGHT) // 2
+        img = bg.crop((left, top, left + WIDTH, top + HEIGHT))
+
+        # 2) 压暗：整体半透明黑 + 顶部渐变（保证标题可读）
+        dark = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 100))
+        img = Image.alpha_composite(img.convert("RGBA"), dark).convert("RGB")
+        grad = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+        gd = ImageDraw.Draw(grad)
+        for y in range(HEIGHT):
+            a = 0
+            if y < 500:
+                a = int(160 * (1 - y / 500))
+            elif y > HEIGHT - 260:
+                a = int(120 * (y - (HEIGHT - 260)) / 260)
+            if a:
+                gd.line([(0, y), (WIDTH, y)], fill=(0, 0, 0, a))
+        img = Image.alpha_composite(img.convert("RGBA"), grad).convert("RGB")
+
+        draw = ImageDraw.Draw(img)
+        font_path = find_cjk_font() or ASCII_FALLBACK
+        if not font_path:
+            return False
+
+        # 3) 标题（自适应字号，最多 5 行）
+        size = int(cfg_cover.get("font_size", 72))
+        font = ImageFont.truetype(font_path, size)
+        margin = 80
+        max_width = WIDTH - margin * 2
+        lines = _wrap_by_width(draw, title or "AI 新闻", font, max_width)
+        while len(lines) > 5 and size > 40:
+            size -= 8
+            font = ImageFont.truetype(font_path, size)
+            lines = _wrap_by_width(draw, title or "AI 新闻", font, max_width)
+        line_h = int(size * 1.4)
+        start_y = HEIGHT // 2 - len(lines) * line_h // 2 - 60
+        for i, line in enumerate(lines):
+            draw.text((margin, start_y + i * line_h), line, font=font, fill=(255, 255, 255))
+
+        # 4) 底部来源 + 日期
+        small = ImageFont.truetype(font_path, 34)
+        draw.text((margin, HEIGHT - 160), "来源: " + source, font=small, fill=(200, 210, 230))
+        draw.text((margin, HEIGHT - 110), date_str, font=small, fill=(200, 210, 230))
+
+        # 5) 角标
+        badge = ImageFont.truetype(font_path, 36)
+        draw.text((margin, 70), "AI NEWS", font=badge, fill=(130, 200, 255))
+
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        img.save(out_path, "PNG")
+        return True
+    except Exception as e:
+        log.warning("封面叠加失败: %s", e)
+        return False
