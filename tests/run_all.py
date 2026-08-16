@@ -13,6 +13,8 @@ MODULES = [
     "test_llm",
     "test_cover",
     "test_db",
+    "test_cookies",
+    "test_webpublisher",
     "test_pipeline",
 ]
 

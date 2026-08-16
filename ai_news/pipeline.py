@@ -31,10 +31,29 @@ class Pipeline:
             model=get(cfg, "llm.model", "deepseek-chat"),
             temperature=get(cfg, "llm.temperature", 0.4),
         )
-        self.publisher: DouyinOpenClient | None = None
+        self.publisher = None
         douyin_cfg = get(cfg, "douyin", {})
-        if cfg_mod.env("DOUYIN_CLIENT_KEY"):
+        mode = (douyin_cfg.get("mode") or "auto").lower()
+        has_api_creds = bool(cfg_mod.env("DOUYIN_CLIENT_KEY"))
+        if mode in ("auto", "api") and has_api_creds:
+            from .publisher import DouyinOpenClient, TokenStore
+
             self.publisher = DouyinOpenClient(douyin_cfg, TokenStore(db))
+            log.info("发布器: 抖音开放平台 API")
+        elif mode in ("auto", "web"):
+            from .publisher.cookies import resolve_cookies_path
+            from .publisher.douyin_web import DouyinWebPublisher
+
+            web_cfg = dict(get(douyin_cfg, "web", {}))
+            data_dir = str(Path(get(cfg, "data_dir", "data")))
+            web_cfg["data_dir"] = data_dir
+            web_cfg["screenshot_dir"] = str(Path(data_dir) / "logs" / "screenshots")
+            cookies_exist = Path(resolve_cookies_path(web_cfg.get("cookies_path") or "", data_dir)).exists()
+            if mode == "web" or cookies_exist:
+                self.publisher = DouyinWebPublisher(web_cfg)
+                log.info("发布器: 抖音网页版（Playwright）")
+            else:
+                log.info("未找到抖音 cookies，暂以 dry-run 模式生成草稿（可执行 python main.py douyin web login）")
 
     # ---------- 阶段 1: 抓取 ----------
     def crawl(self, sources_filter: list[str] | None = None) -> list[int]:

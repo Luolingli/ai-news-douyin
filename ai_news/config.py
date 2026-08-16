@@ -25,7 +25,8 @@ DEFAULTS: dict[str, Any] = {
         "download_images": True,
         "max_images": 9,
     },
-    "douyin": {"api_style": "auto", "scope": "user_info,video.create", "text_prefix": "", "dry_run": False},
+    "douyin": {"mode": "auto", "api_style": "auto", "scope": "user_info,video.create", "text_prefix": "", "dry_run": False,
+               "web": {"cookies_path": "", "headless": False, "timeout": 90000}},
 }
 
 

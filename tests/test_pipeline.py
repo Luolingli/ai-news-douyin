@@ -16,6 +16,7 @@ def _setup() -> tuple[dict, DB, Pipeline]:
     d = tempfile.mkdtemp(prefix="ai_news_pipe_")
     cfg = deepcopy(DEFAULTS)
     cfg["data_dir"] = d
+    cfg["douyin"]["web"]["cookies_path"] = "/nonexistent.json"  # 避免本机 keepalive cookies 干扰测试
     db = DB(Path(d) / "app.db")
     pipe = Pipeline(cfg, db)
     return cfg, db, pipe

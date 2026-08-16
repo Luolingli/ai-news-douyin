@@ -180,6 +180,33 @@ def cmd_douyin_tokens(args) -> int:
     print("或直接执行: python main.py douyin tokens --gh --repo Luolingli/ai-news-douyin")
     return 0
 
+
+def cmd_douyin_web(args) -> int:
+    """网页版发布器：login=扫码登录保存cookies；check=检查登录态"""
+    from ai_news.publisher.cookies import find_cookies_path
+    from ai_news.publisher.douyin_web import DouyinWebPublisher
+
+    cfg, db, _ = _load()
+    web_action = (args.code or "check").strip().lower()
+    web_cfg = dict(get(cfg, "douyin.web", {}))
+    if args.headless:
+        web_cfg["headless"] = True
+    web_cfg["screenshot_dir"] = str(Path(get(cfg, "data_dir", "data")) / "logs" / "screenshots")
+    pub = DouyinWebPublisher(web_cfg)
+    if web_action == "login":
+        res = pub.login_interactive(wait_minutes=5)
+        print(res)
+    else:
+        res = pub.check_login()
+        if res["logged_in"]:
+            print(f"登录正常：{res['account'] or '账号已登录'} | {res['url'][:80]}")
+        else:
+            print(f"未登录（cookies 失效）：{res['url'][:80]}\n请执行: python main.py douyin web login")
+        db.close()
+        return 0 if res["logged_in"] else 1
+    db.close()
+    return 0 if res.get("ok") else 1
+
 def cmd_douyin_whoami(args) -> int:
     cfg, db, _ = _load()
     client = _douyin_client(cfg, db)
@@ -244,13 +271,14 @@ def main() -> int:
     p.set_defaults(fn=cmd_publish)
 
     p = sub.add_parser("douyin", help="抖音授权管理")
-    p.add_argument("action", choices=["auth", "callback", "whoami", "renew", "tokens"])
-    p.add_argument("code", nargs="?", default="", help="callback 用的授权 code 或回调 URL")
+    p.add_argument("action", choices=["auth", "callback", "whoami", "renew", "tokens", "web"])
+    p.add_argument("code", nargs="?", default="", help="callback 用的授权 code 或回调 URL；web 子命令用 login/check")
     p.add_argument("--gh", action="store_true", help="tokens 直接写入 GitHub secrets")
     p.add_argument("--repo", default="", help="tokens --gh 时指定 owner/repo")
+    p.add_argument("--headless", action="store_true", help="web 子命令无头模式（不弹窗）")
     p.set_defaults(fn=lambda a: {"auth": cmd_douyin_auth, "callback": cmd_douyin_callback,
                                 "whoami": cmd_douyin_whoami, "renew": cmd_douyin_renew,
-                                "tokens": cmd_douyin_tokens}[a.action](a))
+                                "tokens": cmd_douyin_tokens, "web": cmd_douyin_web}[a.action](a))
 
     args = parser.parse_args()
     return args.fn(args)

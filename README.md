@@ -12,7 +12,7 @@
   - 敏感/违规内容过滤（硬词表 + 引流信号正则 + LLM 复核）
   - 重复内容去重（URL 精确去重 + 文本相似度去重，跨源同新闻只发一次）
 - **内容总结**：DeepSeek 生成抖音风格标题/正文/话题标签（未配 key 时自动降级为本地裁剪，可先跑通全流程）
-- **内容发布**：抖音开放平台 API 发布图文，自动生成 1080x1440 封面卡 + 下载原文配图，access_token 自动刷新
+- **内容发布**：双路线——① 抖音开放平台 API（需企业资质，自动刷新令牌）；② **创作者中心网页版自动化（个人账号可用，Playwright 模拟操作，复用你已有的 keepalive cookies）**；自动生成 1080x1440 封面卡 + 下载原文配图
 - **全自动**：`loop` 定时模式 / crontab / GitHub Actions，SQLite 记录全链路状态，幂等不重发
 
 ## 快速开始
@@ -24,6 +24,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp config.yaml.example config.yaml   # 按需改内容源/检测参数
 cp .env.example .env                 # 填 DeepSeek key；抖音凭据见下方
 
+.venv/bin/python main.py douyin web login   # 首次：弹窗扫码登录抖音（个人账号路线）
+.venv/bin/python main.py douyin web check    # 确认登录态
 .venv/bin/python main.py run --dry-run --limit 3   # 试跑一轮（只生成不发布）
 .venv/bin/python main.py drafts                    # 查看处理记录
 .venv/bin/python main.py run --limit 5             # 正式跑（会发布到抖音）
@@ -53,7 +55,7 @@ tests/                      # 离线测试（python tests/run_all.py）
 
 1. **内容源**：编辑 `config.yaml`，详见 [docs/content_sources.md](docs/content_sources.md)（默认已启用 Telegram 频道 + Google News，开箱即可跑）
 2. **DeepSeek**：`.env` 填 `DEEPSEEK_API_KEY`（https://platform.deepseek.com 创建）
-3. **抖音发布**：按 [docs/douyin_open_platform_setup.md](docs/douyin_open_platform_setup.md) 注册开发者 → 申请图文发布权限 → `python main.py douyin auth` 授权
+3. **抖音发布**：个人账号走网页版路线（推荐）——`python main.py douyin web login` 扫码一次，之后自动复用 keepalive cookies；有企业资质可走 API 路线，见 [docs/douyin_open_platform_setup.md](docs/douyin_open_platform_setup.md)
 4. **定时运行**：本地 `loop` / crontab；或把仓库推到 GitHub，配置 secrets 后启用 `auto_run.yml`
 
 ## 运行测试

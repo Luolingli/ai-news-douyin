@@ -10,14 +10,15 @@ AI 新闻自动搬运流水线：抓取（Telegram 频道 / Google News / RSSHub
 
 - `main.py`：CLI（run/loop/crawl/drafts/publish/douyin auth|callback|whoami|renew|tokens/init）
 - `ai_news/pipeline.py`：主流水线（crawl → process_item：相关性→敏感→去重→LLM→出图→发布）
-- `ai_news/publisher/douyin_open.py`：抖音客户端（OAuth + 上传图文 + 创建图文，modern/legacy 双路径自动回退）
+- `ai_news/publisher/douyin_open.py`：开放平台 API 客户端（需企业资质；OAuth + 上传图文 + 创建图文，modern/legacy 自动回退）
+- `ai_news/publisher/douyin_web.py`：创作者中心网页版发布器（Playwright + cookies，个人账号主路线；选择器基于 2026 界面，改版失败会截图存档）
 - `ai_news/crawlers/`：内容源（tme 免登录最稳；rsshub_twitter/twitter_x 需自备实例/cookies）
 - `config.yaml` + `.env`：配置与密钥；`data/app.db`：SQLite 全链路状态（items/posts/kv）
 
 ## 3. 已知约束与坑
 
 1. **Twitter 免费通道实测全挂**（2026-08）：公共 RSSHub 实例 twitter 路由、Nitter（Cloudflare 验证）、syndication API（空响应）均不可用；默认源是 t.me 频道 + Google News。真实 Twitter 抓取只能靠自建 RSSHub（需 twitter cookies）或 X 直抓后端。
-2. **抖音发布需要开放平台权限**：图文发布能力要申请审核（个人开发者可申请，资质以官方为准）；未配置凭据时流水线会以 dry-run 记录 ready 草稿，不报错。
+2. **抖音发布双路线**：API 路线需要企业资质（个人开发者实测无法创建应用）；网页版路线（`douyin.mode: auto/web`）用 Playwright 模拟操作 creator.douyin.com 发布图文，cookies 复用 `~/.config/douyin_keepalive/cookies.json`（用户已有 launchd keepalive 设施自动续期）。网页发布 UI 可能改版，失败会自动截图到 `data/logs/screenshots/` 便于适配。**关键**：keepalive 的 cookies 只对 www.douyin.com 有效，creator.douyin.com 必须让用户执行 `python main.py douyin web login` 扫码一次，cookies 存到独立的 `data/web_cookies.json`（避免被 keepalive 覆盖）；check 失败就提示重新 login。
 3. **令牌生命周期**：access_token 自动刷新重试；refresh_token 30 天需 `douyin renew` 续期（GH Actions 工作流已内置）。可选 `GH_WRITEBACK_REPO/TOKEN` 用 `gh secret set` 回写云端 secrets（复用 DouYinSparkFlow 的 PAT 思路）。
 4. **封面字体**：macOS 用 PingFang；Linux CI 需 `fonts-noto-cjk`（工作流已装）。无中文字体时封面会出方块并告警。
 5. **去重**：URL 精确去重（DB UNIQUE）+ 文本相似度（0.82，仅与最近 30 篇已发布对比，标题/正文分开比较，拼接会稀释相似度——踩过坑）。

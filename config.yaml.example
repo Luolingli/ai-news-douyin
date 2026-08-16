@@ -69,7 +69,12 @@ media:
 
 # ===== 抖音发布 =====
 douyin:
-  api_style: auto              # auto=自动探测 | modern=/api/douyin/v1/image/* | legacy=/api/douyin/v1/video/*
+  mode: auto                 # auto=有API凭据用API，否则用网页版 | api=仅开放平台API | web=仅网页版自动化
+  api_style: auto            # auto=自动探测 | modern=/api/douyin/v1/image/* | legacy=/api/douyin/v1/video/*
   scope: "user_info,video.create"
   text_prefix: ""              # 可选，发布文案前缀（如 @xxx ）
   dry_run: false               # 全局试跑开关（只生成不发布）
+  web:
+    cookies_path: ""          # 留空自动找 ~/.config/douyin_keepalive/cookies.json
+    headless: false            # 首次运行建议 false，可看到浏览器操作
+    timeout: 90000             # 页面加载超时(ms)
