@@ -2,10 +2,24 @@
 from __future__ import annotations
 
 import os
+import socket
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+# 强制优先 IPv4 解析，避免无 IPv6 路由环境（如部分国内网络/GH Actions）出现
+# "Network is unreachable" 连接错误（参考 Fudan_iCourse_Subscriber 的成熟做法）
+_ORIG_GETADDRINFO = socket.getaddrinfo
+
+
+def _ipv4_preferred(host, port, family=0, *args, **kwargs):
+    if family == 0:
+        family = socket.AF_INET
+    return _ORIG_GETADDRINFO(host, port, family, *args, **kwargs)
+
+
+socket.getaddrinfo = _ipv4_preferred
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
