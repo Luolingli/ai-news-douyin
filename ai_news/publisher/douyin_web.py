@@ -171,7 +171,7 @@ class DouyinWebPublisher:
                 self._add_topics(page, text)
                 self._click_publish(page)
                 ok = self._verify_success(page, result)
-                if ok and self.cookies_path:
+                if ok and result.get("message") == "发布成功" and self.cookies_path:
                     save_cookies(ctx.cookies(), self.cookies_path)
                 result["ok"] = ok
             except Exception as e:

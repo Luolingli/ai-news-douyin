@@ -188,11 +188,23 @@ class Pipeline:
             log.info("[dry-run/未配置发布] 待发布: %s | %s", title, item["url"])
             return {"post_id": post_id, "status": "ready", "title": title}
         try:
-            douyin_item_id = self.publisher.publish(images, text_full, dry_run=False)
-            self.db.update_post(post_id, status="published", douyin_item_id=douyin_item_id,
-                                published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
-            log.info("[已发布] %s -> 抖音 item_id=%s", title, douyin_item_id)
-            return {"post_id": post_id, "status": "published", "title": title}
+            res = self.publisher.publish(images, text_full, dry_run=False)
+            # 网页发布器返回 dict，API 发布器返回字符串 item_id
+            if isinstance(res, dict):
+                ok = bool(res.get("ok"))
+                douyin_item_id = str(res.get("item_id", ""))
+                note = str(res.get("message", ""))
+            else:
+                ok = True
+                douyin_item_id = str(res)
+                note = ""
+            if ok:
+                self.db.update_post(post_id, status="published", douyin_item_id=douyin_item_id,
+                                    published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                    error=note[:500])
+                log.info("[已发布] %s -> 抖音 item_id=%s %s", title, douyin_item_id, note)
+                return {"post_id": post_id, "status": "published", "title": title, "note": note}
+            raise RuntimeError(note or "发布器返回失败")
         except Exception as e:
             self.db.update_post(post_id, status="failed", error=str(e)[:500])
             log.error("[发布失败] %s: %s", title, e)

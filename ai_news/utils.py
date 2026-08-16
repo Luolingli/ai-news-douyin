@@ -32,10 +32,21 @@ def publish_ready(pipeline, dry_run: bool = False, limit: int = 10) -> dict:
                 log.info("[dry-run] 草稿 %d 将发布: %s", p["id"], p.get("title"))
                 stats["published"] += 1
                 continue
-            item_id = pipeline.publisher.publish(images, text, dry_run=False)
+            res = pipeline.publisher.publish(images, text, dry_run=False)
+            if isinstance(res, dict):
+                ok = bool(res.get("ok"))
+                item_id = str(res.get("item_id", ""))
+                note = str(res.get("message", ""))
+            else:
+                ok = True
+                item_id = str(res)
+                note = ""
+            if not ok:
+                raise RuntimeError(note or "发布器返回失败")
             pipeline.db.update_post(p["id"], status="published", douyin_item_id=item_id,
-                                    published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
-            log.info("[已发布] 草稿 %d -> %s", p["id"], item_id)
+                                    published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                    error=note[:500])
+            log.info("[已发布] 草稿 %d -> %s %s", p["id"], item_id, note)
             stats["published"] += 1
         except Exception as e:
             pipeline.db.update_post(p["id"], status="failed", error=str(e)[:500])

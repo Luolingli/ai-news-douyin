@@ -4,9 +4,10 @@
 name: AI News Auto Run
 
 on:
-  schedule:
-    - cron: "0 */4 * * *"   # 每 4 小时（北京时间 08/12/16/20/00/04 点）
-  workflow_dispatch: {}
+  # 云端定时已停用：GitHub 托管 runner 会触发抖音异地风控，改用本地 launchd（scripts/install_launchd.sh）
+  # schedule:
+  #   - cron: "0 */4 * * *"
+  workflow_dispatch: {}   # 保留手动触发（如换新 IP 后测试）
 
 jobs:
   auto-run:
@@ -74,7 +75,7 @@ jobs:
           overwrite: true
 
       - name: Refresh cookies back to secret
-        if: always()
+        if: success()   # 只有流水线成功才回写，避免存失效 cookies
         env:
           GH_TOKEN: ${{ secrets.AI_NEWS_PAT }}
           DOUYIN_WEB_COOKIES_B64: ${{ secrets.DOUYIN_WEB_COOKIES_B64 }}
