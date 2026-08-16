@@ -9,6 +9,7 @@ from pathlib import Path
 from . import config as cfg_mod
 from .config import get
 from .crawlers import build_sources
+from .crawlers.base import fetch_article_text
 from .db import DB
 from .detection import check_sensitive, decide, is_duplicate
 from .llm import LLMClient, SYSTEM_PROMPT, build_user_prompt, fallback_summarize, sanitize_hashtags
@@ -129,8 +130,13 @@ class Pipeline:
 
         # 4) LLM 总结 + 复核
         if self.llm.available and not skip_llm:
+            article = ""
+            if item.get("source_type") in ("rss", "rsshub_twitter"):
+                article = fetch_article_text(item.get("url") or "")
+                if article:
+                    log.info("已抓取文章正文 %d 字: %s", len(article), (item.get("url") or "")[:70])
             try:
-                result = self.llm.chat_json(SYSTEM_PROMPT, build_user_prompt(item))
+                result = self.llm.chat_json(SYSTEM_PROMPT, build_user_prompt(item, article))
             except Exception as e:
                 log.warning("LLM 暂不可用，本条延期重试: %s", e)
                 post_id = self.db.add_post(item_id, status="deferred", body=("LLM 暂不可用: " + str(e))[:300])

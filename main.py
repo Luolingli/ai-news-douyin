@@ -240,11 +240,13 @@ def cmd_douyin_web(args) -> int:
         text = pub_try_text(cfg, post, tags)
         r = pub.publish(images, text, dry_run=False)
         print(r)
+        db.close()
         if r.get("ok"):
             db.update_post(post_id, status="published", douyin_item_id=r.get("item_id", ""),
                            published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
-        else:
-            db.update_post(post_id, status="failed", error=r.get("message", "")[:500])
+            return 0
+        db.update_post(post_id, status="failed", error=r.get("message", "")[:500])
+        return 1
     else:
         res = pub.check_login()
         if res["logged_in"]:

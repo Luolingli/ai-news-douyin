@@ -15,6 +15,7 @@ MODULES = [
     "test_db",
     "test_cookies",
     "test_webpublisher",
+    "test_article",
     "test_pipeline",
 ]
 

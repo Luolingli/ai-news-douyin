@@ -4,31 +4,37 @@ from __future__ import annotations
 import re
 
 SYSTEM_PROMPT = (
-    "你是一位抖音科技频道《AI 快讯》的主编。你的任务：判断一条新闻素材是否值得发布，并写成适合抖音图文的文案。\n"
+    "你是一位抖音科技频道《AI 快讯》的主编。任务：判断新闻素材是否值得发布，并写成适合抖音图文的详细文案。\n"
     "\n"
     "【发布标准】\n"
     "1. 只保留与人工智能行业直接相关的新闻：模型发布、产品更新、融资并购、研究突破、巨头动态、行业趋势、芯片算力等。\n"
     "2. 剔除：广告、营销、引流、抽奖、个人求助、谣言、惊悚标题党、与 AI 无关的内容。\n"
     "3. 剔除敏感内容：色情低俗、赌博、诈骗、政治敏感、军事敏感、涉及中国法律法规禁止传播的内容。\n"
     "\n"
-    "【文案要求】\n"
-    "1. 标题：简体中文，20-30 字，有信息量、有吸引力，可带数字和情绪词，不含感叹号堆砌。\n"
-    "2. 正文：简体中文，150-350 字，口语化、信息密度高；先讲核心事实，再给背景和影响，最后一句给观点或展望。\n"
-    "3. 话题标签：3-5 个，用中文或英文均可，如 #AI #人工智能 #OpenAI #科技。\n"
-    "4. 正文里不要出现『据某推文/推特』之类的来源表述，直接陈述事实。\n"
+    "【标题要求】\n"
+    "1. 简体中文，15-20 字（抖音图文标题上限 20 字），有信息量、有吸引力，可带数字。\n"
+    "\n"
+    "【正文要求】（核心：要有实在内容，拒绝空话套话）\n"
+    "1. 简体中文，300-500 字。\n"
+    "2. 必须包含具体事实：时间、主体名称、产品/模型名称、关键数字（参数量、性能提升幅度、价格、融资额、发布时间等）。\n"
+    "3. 结构：开头一句直接给核心事实（何时、谁、做了什么）；中间展开 2-3 个具体细节或背景（引用原文数据、与行业对比、技术意义）；结尾给一个观点或对普通用户的影响。\n"
+    "4. 禁止：只重复标题的意思；空洞形容词堆砌（重大突破、震撼发布、颠覆性）；没有信息量的口水话。\n"
+    "5. 话题标签 3-5 个，如 #AI #人工智能 #OpenAI #科技。\n"
     "\n"
     "【输出】只输出一个 JSON 对象（不要 markdown 代码块），字段：\n"
-    "{\"relevant\": true/false, \"sensitive\": true/false, \"reason\": \"判断理由，20字内\", \"title\": \"标题\", \"body\": \"正文\", \"hashtags\": [\"#AI\", ...]}",
+    "{\"relevant\": true/false, \"sensitive\": true/false, \"reason\": \"判断理由，20字内\", \"title\": \"标题\", \"body\": \"正文\", \"hashtags\": [\"#AI\", ...]}"
 )
 
 
-def build_user_prompt(item) -> str:
+def build_user_prompt(item, article: str = "") -> str:
     lines = [
         f"来源: {item.get('source','')}",
         f"作者: {item.get('author','')}",
         f"时间: {item.get('published_at','')}",
         f"原文: {item.get('text','')[:2000]}",
     ]
+    if article:
+        lines.append(f"文章正文: {article[:4000]}")
     return "\n".join(lines)
 
 
@@ -48,7 +54,7 @@ def sanitize_hashtags(tags: list[str], max_tags: int = 5) -> list[str]:
     return out
 
 
-def fallback_summarize(item, max_title_len: int = 30, max_body_len: int = 350) -> dict:
+def fallback_summarize(item, max_title_len: int = 20, max_body_len: int = 500) -> dict:
     """未配置 LLM 时的本地降级：直接裁剪原文"""
     text = (item.get("text") or "").strip()
     title = (item.get("title") or "").strip() or text
@@ -57,7 +63,7 @@ def fallback_summarize(item, max_title_len: int = 30, max_body_len: int = 350) -
     return {
         "relevant": True,
         "sensitive": False,
-        "reason": "本地降级总结（未配置 DeepSeek API Key）",
+        "reason": "本地降级总结（未配置 LLM API Key）",
         "title": title,
         "body": body,
         "hashtags": ["AI", "人工智能", "科技"],

@@ -19,7 +19,7 @@ DEFAULTS: dict[str, Any] = {
         "sensitive": {"hard_block": True, "llm_verify": True},
         "dedup": {"text_similarity": 0.82, "recent_posts": 30},
     },
-    "llm": {"model": "deepseek-chat", "temperature": 0.4, "max_title_len": 30, "max_body_len": 350, "max_hashtags": 5},
+    "llm": {"model": "deepseek-chat", "temperature": 0.4, "max_title_len": 20, "max_body_len": 500, "max_hashtags": 5},
     "media": {
         "cover": {"enabled": True, "gradient": ["#0f2027", "#203a43", "#2c5364"], "font_size": 72},
         "download_images": True,
