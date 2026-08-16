@@ -32,7 +32,7 @@ class Pipeline:
             model=get(cfg, "llm.model", "deepseek-chat"),
             model_fallbacks=get(cfg, "llm.model_fallbacks", []) or None,
             temperature=get(cfg, "llm.temperature", 0.4),
-            max_retries=2,
+            max_retries=1,
             backoff_base=5.0,
         )
         self.publisher = None
