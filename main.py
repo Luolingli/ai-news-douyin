@@ -1,0 +1,222 @@
+"""
+AI News → 抖音 自动搬运流水线
+
+用法示例:
+  python main.py init                  # 生成 config.yaml
+  python main.py run --limit 5 --dry-run   # 试跑一轮（不发布）
+  python main.py run --limit 5             # 跑一轮并发布
+  python main.py loop --interval 3600      # 定时循环（无人值守）
+  python main.py crawl                    # 只抓取入库
+  python main.py drafts                   # 查看草稿/记录
+  python main.py publish --dry-run        # 发布 ready 草稿
+  python main.py douyin auth              # 打印抖音授权链接
+  python main.py douyin callback <code>   # 用授权 code 换取令牌
+  python main.py douyin whoami            # 查看当前授权账号
+  python main.py douyin renew             # 续期 refresh_token
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import re
+import sys
+from pathlib import Path
+
+from ai_news import config as cfg_mod
+from ai_news.config import get
+from ai_news.db import DB
+from ai_news.logging_setup import setup_logging
+from ai_news.pipeline import Pipeline
+from ai_news.publisher import DouyinOpenClient, DouyinError, TokenStore
+from ai_news.scheduler import LoopRunner
+from ai_news.utils import publish_ready, show_posts
+
+log = logging.getLogger("ai_news.cli")
+
+
+def cmd_init(args) -> int:
+    target = Path("config.yaml")
+    if target.exists():
+        print(f"config.yaml 已存在: {target.resolve()}")
+        return 0
+    example = Path(__file__).parent.parent / "config.yaml.example"
+    target.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"已生成 {target.resolve()}，请编辑后使用；密钥填入 .env（参考 .env.example）")
+    return 0
+
+
+def _load() -> tuple[dict, DB, Pipeline]:
+    cfg = cfg_mod.load_config()
+    data_dir = Path(get(cfg, "data_dir", "data"))
+    db = DB(data_dir / "app.db")
+    setup_logging(get(cfg, "log_level", "INFO"), log_dir=str(data_dir / "logs"))
+    return cfg, db, Pipeline(cfg, db)
+
+
+def cmd_run(args) -> int:
+    cfg, db, pipe = _load()
+    sources = args.sources.split(",") if args.sources else None
+    stats = pipe.run(limit=args.limit, sources=sources, dry_run=args.dry_run, skip_llm=args.skip_llm)
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+    db.close()
+    return 0 if stats["failed"] == 0 else 1
+
+
+def cmd_loop(args) -> int:
+    cfg, db, pipe = _load()
+    runner = LoopRunner(pipe, interval=args.interval, limit=args.limit, dry_run=args.dry_run,
+                        skip_llm=args.skip_llm)
+    try:
+        runner.run_forever()
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_crawl(args) -> int:
+    cfg, db, pipe = _load()
+    new_ids = pipe.crawl(sources_filter=args.sources.split(",") if args.sources else None)
+    print(f"新增 {len(new_ids)} 条")
+    if args.json:
+        items = [db.get_item(i) for i in new_ids]
+        print(json.dumps(items, ensure_ascii=False, indent=2))
+    db.close()
+    return 0
+
+
+def cmd_drafts(args) -> int:
+    cfg, db, pipe = _load()
+    posts = db.get_posts(status=None, limit=args.limit)
+    print(show_posts(posts))
+    db.close()
+    return 0
+
+
+def cmd_publish(args) -> int:
+    cfg, db, pipe = _load()
+    stats = publish_ready(pipe, dry_run=args.dry_run, limit=args.limit)
+    print(json.dumps(stats, ensure_ascii=False))
+    db.close()
+    return 0
+
+
+def _douyin_client(cfg: dict, db: DB) -> DouyinOpenClient:
+    return DouyinOpenClient(get(cfg, "douyin", {}), TokenStore(db))
+
+
+def cmd_douyin_auth(args) -> int:
+    cfg, db, _ = _load()
+    client = _douyin_client(cfg, db)
+    if not client.client_key:
+        print("未配置 DOUYIN_CLIENT_KEY（见 .env）", file=sys.stderr)
+        return 1
+    print("请在浏览器打开以下链接并授权：")
+    print(client.authorize_url())
+    print("\n授权后浏览器会跳转到回调地址，把 URL 里的 code 参数值拿来执行：")
+    print("  python main.py douyin callback <code>")
+    db.close()
+    return 0
+
+
+def cmd_douyin_callback(args) -> int:
+    cfg, db, _ = _load()
+    client = _douyin_client(cfg, db)
+    code = args.code.strip()
+    m = re.search(r"code=([^&]+)", code)
+    if m:
+        code = m.group(1)
+    try:
+        d = client.exchange_code(code)
+        try:
+            info = client.userinfo()
+        except Exception:
+            info = {}
+        print("授权成功：")
+        print("  open_id:", d.get("open_id"))
+        print("  昵称:", (info or {}).get("nickname") or (info or {}).get("e_account_role") or "未知")
+        print("  access_token 有效期:", d.get("expires_in"), "秒")
+        print("令牌已保存到数据库；如需 GitHub Actions 云端运行，请把令牌复制到仓库 secrets（见 .env.example）")
+    except DouyinError as e:
+        print(f"授权失败: {e}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_douyin_whoami(args) -> int:
+    cfg, db, _ = _load()
+    client = _douyin_client(cfg, db)
+    try:
+        info = client.userinfo()
+        print(json.dumps(info, ensure_ascii=False, indent=2))
+    except DouyinError as e:
+        print(f"获取失败（可能需要先授权/刷新）: {e}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_douyin_renew(args) -> int:
+    cfg, db, _ = _load()
+    client = _douyin_client(cfg, db)
+    try:
+        client.renew_refresh_token()
+        print("refresh_token 续期成功（已保存）")
+    except DouyinError as e:
+        print(f"续期失败: {e}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="AI 新闻 → 抖音 自动搬运流水线")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("init", help="生成 config.yaml")
+    p.set_defaults(fn=cmd_init)
+
+    p = sub.add_parser("run", help="跑一轮完整流水线")
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--sources", default=None, help="逗号分隔的源名称，如 tg_ai_news,google_ai")
+    p.add_argument("--dry-run", action="store_true", help="不真正发布")
+    p.add_argument("--skip-llm", action="store_true", help="跳过 LLM（用本地降级）")
+    p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("loop", help="定时循环运行")
+    p.add_argument("--interval", type=int, default=3600, help="间隔秒数")
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--skip-llm", action="store_true")
+    p.set_defaults(fn=cmd_loop)
+
+    p = sub.add_parser("crawl", help="只抓取入库")
+    p.add_argument("--sources", default=None)
+    p.add_argument("--json", action="store_true", help="打印条目详情")
+    p.set_defaults(fn=cmd_crawl)
+
+    p = sub.add_parser("drafts", help="查看处理记录")
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(fn=cmd_drafts)
+
+    p = sub.add_parser("publish", help="发布 ready 草稿")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_publish)
+
+    p = sub.add_parser("douyin", help="抖音授权管理")
+    p.add_argument("action", choices=["auth", "callback", "whoami", "renew"])
+    p.add_argument("code", nargs="?", default="", help="callback 用的授权 code 或回调 URL")
+    p.set_defaults(fn=lambda a: {"auth": cmd_douyin_auth, "callback": cmd_douyin_callback,
+                                "whoami": cmd_douyin_whoami, "renew": cmd_douyin_renew}[a.action](a))
+
+    args = parser.parse_args()
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,75 @@
+# ===== 全局 =====
+data_dir: data          # SQLite 数据库与图片输出目录
+log_level: INFO
+timezone: Asia/Shanghai
+
+# ===== 内容源（按顺序抓取，多源自动合并去重）=====
+sources:
+  - type: tme                  # Telegram 频道预览页（免登录，稳定）
+    name: tg_ai_news
+    channel: AI_News_Official  # https://t.me/s/AI_News_Official
+    enabled: true
+    max_items: 20
+
+  - type: googlenews           # Google News 关键词搜索 RSS（免登录，稳定）
+    name: google_ai
+    query: '"OpenAI" OR "Anthropic" OR "Google DeepMind" OR "Meta AI" OR "大模型"'
+    lang: en-US
+    enabled: true
+    max_items: 20
+
+  - type: rss                  # 任意自定义 RSS（如自建 RSSHub 输出）
+    name: my_rss
+    url: https://example.com/feed.xml
+    enabled: false
+    max_items: 20
+
+  - type: rsshub_twitter       # 自建 RSSHub 的 Twitter 路由（需要自己部署实例）
+    name: twitter_via_rsshub
+    base_url: http://localhost:1200
+    accounts: [OpenAI, AnthropicAI, GoogleDeepMind, MetaAI, karpathy]
+    enabled: false
+    max_items: 50
+
+  - type: twitter_x            # X.com 直抓（需自备 cookies，实验性）
+    name: twitter_x
+    accounts: [OpenAI, AnthropicAI]
+    cookies_path: ""
+    enabled: false
+    max_items: 50
+
+# ===== 内容检测 =====
+detection:
+  relevance:
+    threshold: 0.4             # 关键词打分 >= 阈值直接通过；0.2~0.4 交给 LLM 判断；<0.2 丢弃
+    extra_keywords: []         # 追加 AI 关键词（英文小写）
+  sensitive:
+    hard_block: true           # 命中敏感词表直接丢弃
+    llm_verify: true           # 是否再让 LLM 复核一遍敏感内容
+  dedup:
+    text_similarity: 0.82      # 与已发布内容文本相似度 >= 此值视为重复
+    recent_posts: 30           # 只与最近 N 篇已发布内容比较
+
+# ===== DeepSeek 总结 =====
+llm:
+  model: deepseek-chat
+  temperature: 0.4
+  max_title_len: 30            # 标题最大字数
+  max_body_len: 350            # 正文最大字数
+  max_hashtags: 5
+
+# ===== 图文媒体 =====
+media:
+  cover:
+    enabled: true              # 生成封面卡（1080x1440），保证图文至少 1 张图
+    gradient: ["#0f2027", "#203a43", "#2c5364"]
+    font_size: 72
+  download_images: true        # 下载原文配图（最多 9 张，总数含封面）
+  max_images: 9
+
+# ===== 抖音发布 =====
+douyin:
+  api_style: auto              # auto=自动探测 | modern=/api/douyin/v1/image/* | legacy=/api/douyin/v1/video/*
+  scope: "user_info,video.create"
+  text_prefix: ""              # 可选，发布文案前缀（如 @xxx ）
+  dry_run: false               # 全局试跑开关（只生成不发布）

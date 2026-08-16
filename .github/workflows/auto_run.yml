@@ -1,0 +1,44 @@
+name: AI News Auto Run
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"   # 每 4 小时跑一轮（北京时间 08:00/12:00/16:00/20:00/00:00/04:00）
+  workflow_dispatch: {}
+
+jobs:
+  auto-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -q -r requirements.txt
+          # 封面图需要中文字体
+          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+
+      - name: Run pipeline
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DOUYIN_CLIENT_KEY: ${{ secrets.DOUYIN_CLIENT_KEY }}
+          DOUYIN_CLIENT_SECRET: ${{ secrets.DOUYIN_CLIENT_SECRET }}
+          DOUYIN_ACCESS_TOKEN: ${{ secrets.DOUYIN_ACCESS_TOKEN }}
+          DOUYIN_REFRESH_TOKEN: ${{ secrets.DOUYIN_REFRESH_TOKEN }}
+          DOUYIN_OPEN_ID: ${{ secrets.DOUYIN_OPEN_ID }}
+          GH_WRITEBACK_REPO: ${{ github.repository }}
+          GH_WRITEBACK_TOKEN: ${{ secrets.AI_NEWS_PAT }}
+        run: python main.py run --limit 5
+
+      - name: Renew refresh token (always)
+        if: always()
+        env:
+          DOUYIN_CLIENT_KEY: ${{ secrets.DOUYIN_CLIENT_KEY }}
+          DOUYIN_CLIENT_SECRET: ${{ secrets.DOUYIN_CLIENT_SECRET }}
+          DOUYIN_REFRESH_TOKEN: ${{ secrets.DOUYIN_REFRESH_TOKEN }}
+          GH_WRITEBACK_REPO: ${{ github.repository }}
+          GH_WRITEBACK_TOKEN: ${{ secrets.AI_NEWS_PAT }}
+        run: python main.py douyin renew || echo "renew failed (may not need yet)"
