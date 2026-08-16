@@ -145,6 +145,41 @@ def cmd_douyin_callback(args) -> int:
     return 0
 
 
+
+def cmd_douyin_tokens(args) -> int:
+    """打印当前授权令牌；--gh 直接写入 GitHub secrets"""
+    import shutil
+    import subprocess
+
+    cfg, db, _ = _load()
+    store = TokenStore(db)
+    vals = {
+        "DOUYIN_ACCESS_TOKEN": store.get("access_token"),
+        "DOUYIN_REFRESH_TOKEN": store.get("refresh_token"),
+        "DOUYIN_OPEN_ID": store.get("open_id"),
+    }
+    missing = [k for k, v in vals.items() if not v]
+    if missing:
+        print("以下令牌为空（请先执行: python main.py douyin auth → callback <code>）:",
+              ", ".join(missing), file=sys.stderr)
+    if args.gh:
+        repo = args.repo or cfg_mod.env("GH_WRITEBACK_REPO")
+        if not repo or not shutil.which("gh"):
+            print("需要 --repo <owner/repo> 参数（或 GH_WRITEBACK_REPO 环境变量）且已安装 gh", file=sys.stderr)
+            return 1
+        for k, v in vals.items():
+            if not v:
+                continue
+            r = subprocess.run(["gh", "secret", "set", k, "--repo", repo, "--body", v],
+                               capture_output=True, text=True, timeout=30)
+            print(f"{k}: {'已写入 ' + repo if r.returncode == 0 else '写入失败: ' + r.stderr.strip()}")
+        return 0
+    for k, v in vals.items():
+        print(f"{k}={v}" if v else f"{k}=(空)")
+    print("\n复制以上三个值到 GitHub 仓库: Settings → Secrets and variables → Actions")
+    print("或直接执行: python main.py douyin tokens --gh --repo Luolingli/ai-news-douyin")
+    return 0
+
 def cmd_douyin_whoami(args) -> int:
     cfg, db, _ = _load()
     client = _douyin_client(cfg, db)
@@ -209,10 +244,13 @@ def main() -> int:
     p.set_defaults(fn=cmd_publish)
 
     p = sub.add_parser("douyin", help="抖音授权管理")
-    p.add_argument("action", choices=["auth", "callback", "whoami", "renew"])
+    p.add_argument("action", choices=["auth", "callback", "whoami", "renew", "tokens"])
     p.add_argument("code", nargs="?", default="", help="callback 用的授权 code 或回调 URL")
+    p.add_argument("--gh", action="store_true", help="tokens 直接写入 GitHub secrets")
+    p.add_argument("--repo", default="", help="tokens --gh 时指定 owner/repo")
     p.set_defaults(fn=lambda a: {"auth": cmd_douyin_auth, "callback": cmd_douyin_callback,
-                                "whoami": cmd_douyin_whoami, "renew": cmd_douyin_renew}[a.action](a))
+                                "whoami": cmd_douyin_whoami, "renew": cmd_douyin_renew,
+                                "tokens": cmd_douyin_tokens}[a.action](a))
 
     args = parser.parse_args()
     return args.fn(args)

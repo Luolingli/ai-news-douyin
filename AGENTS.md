@@ -8,7 +8,7 @@ AI 新闻自动搬运流水线：抓取（Telegram 频道 / Google News / RSSHub
 
 ## 2. 关键入口
 
-- `main.py`：CLI（run/loop/crawl/drafts/publish/douyin auth|callback|whoami|renew/init）
+- `main.py`：CLI（run/loop/crawl/drafts/publish/douyin auth|callback|whoami|renew|tokens/init）
 - `ai_news/pipeline.py`：主流水线（crawl → process_item：相关性→敏感→去重→LLM→出图→发布）
 - `ai_news/publisher/douyin_open.py`：抖音客户端（OAuth + 上传图文 + 创建图文，modern/legacy 双路径自动回退）
 - `ai_news/crawlers/`：内容源（tme 免登录最稳；rsshub_twitter/twitter_x 需自备实例/cookies）
