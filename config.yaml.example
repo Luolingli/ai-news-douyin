@@ -132,6 +132,8 @@ detection:
   dedup:
     text_similarity: 0.82      # 与已发布内容文本相似度 >= 此值视为重复
     recent_posts: 30           # 只与最近 N 篇已发布内容比较
+  freshness:
+    max_age_hours: 48          # 只发 48 小时内的新闻（保时效）
 
 # ===== DeepSeek 总结 =====
 llm:

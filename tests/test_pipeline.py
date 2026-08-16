@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import tempfile
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ai_news.config import DEFAULTS
@@ -25,7 +26,8 @@ def _setup() -> tuple[dict, DB, Pipeline]:
 def test_pipeline_ready_and_cover():
     cfg, db, pipe = _setup()
     it = RawItem(source="s", source_type="tme", source_id="1", url="https://t.me/s/1",
-                 text="OpenAI 发布 GPT-5 新模型，推理能力大幅提升，支持多模态输入", published_at="2025-06-01T00:00:00+00:00")
+                 text="OpenAI 发布 GPT-5 新模型，推理能力大幅提升，支持多模态输入",
+                 published_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
     item_id = db.insert_item(it)
     assert item_id is not None
     res = pipe.process_item(item_id, dry_run=True, skip_llm=True)

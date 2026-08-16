@@ -32,12 +32,13 @@ DEFAULTS: dict[str, Any] = {
         "relevance": {"threshold": 0.4, "extra_keywords": []},
         "sensitive": {"hard_block": True, "llm_verify": True},
         "dedup": {"text_similarity": 0.82, "recent_posts": 30},
+        "freshness": {"max_age_hours": 48},
     },
     "llm": {"model": "deepseek-chat", "temperature": 0.4, "max_title_len": 20, "max_body_len": 800, "max_hashtags": 5,
                "ai_footer": "—— 本文由 AI 转录整理，仅供参考 ——"},
     "media": {
         "cover": {"enabled": True, "gradient": ["#0f2027", "#203a43", "#2c5364"], "font_size": 72},
-        "download_images": True,
+        "download_images": False,  # 版权合规：默认不下载媒体原文配图，只用原创封面
         "max_images": 9,
     },
     "douyin": {"mode": "auto", "api_style": "auto", "scope": "user_info,video.create", "text_prefix": "", "dry_run": False,

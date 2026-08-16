@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from . import config as cfg_mod
@@ -17,6 +18,22 @@ from .media import download_image, generate_cover
 from .publisher import DouyinOpenClient, TokenStore
 
 log = logging.getLogger("ai_news.pipeline")
+
+
+def _parse_time(s: str):
+    """解析发布时间：ISO8601 或 RFC822（RSS 常见），失败返回 None"""
+    if not s:
+        return None
+    s = s.strip()
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    try:
+        return parsedate_to_datetime(s)
+    except (TypeError, ValueError):
+        return None
 
 
 class Pipeline:
@@ -91,6 +108,17 @@ class Pipeline:
         rel_cfg = get(det, "relevance", {})
         sen_cfg = get(det, "sensitive", {})
         dedup_cfg = get(det, "dedup", {})
+
+        # 0) 时效过滤：只发新鲜新闻（发布时间超过 max_age_hours 丢弃）
+        max_age = int(get(det, "freshness.max_age_hours", 48))
+        pub = _parse_time(item.get("published_at") or "")
+        if pub is not None:
+            age = datetime.now(timezone.utc) - pub
+            if age > timedelta(hours=max_age):
+                reason = f"新闻过时({int(age.total_seconds() // 3600)}小时前，超过 {max_age} 小时)"
+                post_id = self.db.add_post(item_id, status="skipped", body=reason)
+                log.info("[跳过-过时] %s: %s", item["url"], reason)
+                return {"post_id": post_id, "status": "skipped", "reason": reason}
         llm_cfg = get(self.cfg, "llm", {})
         media_cfg = get(self.cfg, "media", {})
 
