@@ -46,7 +46,7 @@ def http_get_bytes(url: str, timeout: int = 30, **kw: Any) -> bytes:
     return resp.content
 
 
-def extract_article_text(html_text: str, max_chars: int = 4000) -> str:
+def extract_article_text(html_text: str, max_chars: int = 8000) -> str:
     """从文章 HTML 中提取正文（纯函数，便于测试）：取 h1-h3 / p 文本"""
     import html as html_mod
 
@@ -63,7 +63,7 @@ def extract_article_text(html_text: str, max_chars: int = 4000) -> str:
     return text[:max_chars]
 
 
-def fetch_article_text(url: str, timeout: int = 20, max_chars: int = 4000) -> str:
+def fetch_article_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
     """尽力抓取文章正文（失败返回空串，不影响流程）"""
     try:
         html_text = http_get_text(url, timeout=timeout)

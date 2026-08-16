@@ -74,3 +74,12 @@ def test_pipeline_dedup_against_published():
     assert r2["status"] == "skipped", r2
     assert "重复" in r2["reason"]
     db.close()
+
+
+def test_compose_text_with_footer():
+    cfg, db, pipe = _setup()
+    t = pipe._compose_text("标题示例二十个字内", "正文内容比较详细的一段话。", ["AI", "人工智能"])
+    assert "AI 转录" in t, t
+    assert "#AI" in t and "#人工智能" in t
+    assert t.startswith("标题示例") and "正文内容" in t
+    db.close()

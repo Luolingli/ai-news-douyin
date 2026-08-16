@@ -160,8 +160,9 @@ class Pipeline:
         body = str(result.get("body") or "").strip()[: int(llm_cfg.get("max_body_len", 350))]
         hashtags = sanitize_hashtags(result.get("hashtags"), int(llm_cfg.get("max_hashtags", 5)))
         if not title and not body:
-            post_id = self.db.add_post(item_id, status="skipped", body="LLM 输出为空")
-            return {"post_id": post_id, "status": "skipped", "reason": "LLM 输出为空"}
+            # 空输出多为限流假象，延期到下轮重试
+            post_id = self.db.add_post(item_id, status="deferred", body="LLM 输出为空")
+            return {"post_id": post_id, "status": "deferred", "reason": "LLM 输出为空"}
 
         # 5) 出图：封面 + 原文配图
         images: list[str] = []
@@ -223,10 +224,13 @@ class Pipeline:
 
     def _compose_text(self, title: str, body: str, hashtags: list[str]) -> str:
         prefix = get(self.cfg, "douyin.text_prefix", "") or ""
-        parts = [prefix, title, "", body]
+        footer = get(self.cfg, "llm.ai_footer", "") or ""
+        parts = [prefix, title, body]
+        if footer:
+            parts.append(footer)
         if hashtags:
-            parts += ["", " ".join("#" + t for t in hashtags)]
-        text = "\n".join(p for p in parts if p != "" or p is None)
+            parts.append(" ".join("#" + t for t in hashtags))
+        text = "\n\n".join(p for p in parts if p)
         return text[:1000]
 
     # ---------- 整体运行 ----------
