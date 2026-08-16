@@ -29,7 +29,10 @@ class Pipeline:
             api_key=api_key,
             base_url=cfg_mod.env("LLM_BASE_URL", "https://api.deepseek.com"),
             model=get(cfg, "llm.model", "deepseek-chat"),
+            model_fallbacks=get(cfg, "llm.model_fallbacks", []) or None,
             temperature=get(cfg, "llm.temperature", 0.4),
+            max_retries=2,
+            backoff_base=5.0,
         )
         self.publisher = None
         douyin_cfg = get(cfg, "douyin", {})
@@ -123,20 +126,22 @@ class Pipeline:
             log.info("[跳过-重复] %s: %s", item["url"], reason)
             return {"post_id": post_id, "status": "skipped", "reason": reason}
 
+
         # 4) LLM 总结 + 复核
         if self.llm.available and not skip_llm:
             try:
                 result = self.llm.chat_json(SYSTEM_PROMPT, build_user_prompt(item))
             except Exception as e:
-                log.warning("LLM 总结失败，改用本地降级: %s", e)
-                result = fallback_summarize(item)
+                log.warning("LLM 暂不可用，本条延期重试: %s", e)
+                post_id = self.db.add_post(item_id, status="deferred", body=("LLM 暂不可用: " + str(e))[:300])
+                return {"post_id": post_id, "status": "deferred", "reason": str(e)[:200]}
             if need_llm_judge and not result.get("relevant", True):
-                reason = f"LLM 判定与 AI 无关: {result.get('reason', '')}"
+                reason = "LLM 判定与 AI 无关: " + str(result.get("reason", ""))
                 post_id = self.db.add_post(item_id, status="skipped", body=reason)
                 log.info("[跳过] %s", reason)
                 return {"post_id": post_id, "status": "skipped", "reason": reason}
             if result.get("sensitive") or (sensitive and sen_cfg.get("llm_verify", True)):
-                reason = f"敏感内容: {result.get('reason', 'LLM 判定敏感')}"
+                reason = "敏感内容: " + str(result.get("reason", "LLM 判定敏感"))
                 post_id = self.db.add_post(item_id, status="skipped", body=reason)
                 log.info("[跳过-敏感] %s", reason)
                 return {"post_id": post_id, "status": "skipped", "reason": reason}
@@ -221,7 +226,7 @@ class Pipeline:
     # ---------- 整体运行 ----------
     def run(self, limit: int = 5, sources: list[str] | None = None, dry_run: bool = False,
             skip_llm: bool = False) -> dict:
-        stats = {"fetched_new": 0, "processed": 0, "skipped": 0, "ready": 0, "published": 0, "failed": 0}
+        stats = {"fetched_new": 0, "processed": 0, "skipped": 0, "deferred": 0, "ready": 0, "published": 0, "failed": 0}
         new_ids = self.crawl(sources)
         stats["fetched_new"] = len(new_ids)
         for item_id in new_ids[:limit]:

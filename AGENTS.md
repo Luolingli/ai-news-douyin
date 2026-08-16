@@ -17,6 +17,7 @@ AI 新闻自动搬运流水线：抓取（Telegram 频道 / Google News / RSSHub
 
 ## 3. 已知约束与坑
 
+0. **LLM 用 ModelScope 免费 API**（key 在 .env）：`deepseek-ai/DeepSeek-V4-Flash-0731` + fallbacks（Qwen/Qwen3.5-122B-A10B、ZhipuAI/GLM-4.7-Flash）。免费档**限流时会返回 200 + choices:null**——客户端已实现空响应重试（5/10/20s）+ 多模型切换；全部失败时条目标 `deferred` 下轮重试（不发布原文降级文案）。换模型改 .env 的 LLM_MODEL。
 1. **Twitter 免费通道实测全挂**（2026-08）：公共 RSSHub 实例 twitter 路由、Nitter（Cloudflare 验证）、syndication API（空响应）均不可用；默认源是 t.me 频道 + Google News。真实 Twitter 抓取只能靠自建 RSSHub（需 twitter cookies）或 X 直抓后端。
 2. **抖音发布双路线**：API 路线需要企业资质（个人开发者实测无法创建应用）；网页版路线（`douyin.mode: auto/web`）用 Playwright 模拟操作 creator.douyin.com 发布图文，cookies 复用 `~/.config/douyin_keepalive/cookies.json`（用户已有 launchd keepalive 设施自动续期）。网页发布 UI 可能改版，失败会自动截图到 `data/logs/screenshots/` 便于适配。**关键**：keepalive 的 cookies 只对 www.douyin.com 有效，creator.douyin.com 必须让用户执行 `python main.py douyin web login` 扫码一次，cookies 存到独立的 `data/web_cookies.json`（避免被 keepalive 覆盖）；check 失败就提示重新 login。
 3. **令牌生命周期**：access_token 自动刷新重试；refresh_token 30 天需 `douyin renew` 续期（GH Actions 工作流已内置）。可选 `GH_WRITEBACK_REPO/TOKEN` 用 `gh secret set` 回写云端 secrets（复用 DouYinSparkFlow 的 PAT 思路）。

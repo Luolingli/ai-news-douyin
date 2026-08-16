@@ -67,6 +67,12 @@ def _apply_env_overrides(cfg: dict) -> dict:
         )
     if os.environ.get("DOUYIN_WEB_COOKIES"):
         cfg.setdefault("douyin", {}).setdefault("web", {})["cookies_path"] = os.environ["DOUYIN_WEB_COOKIES"]
+    if os.environ.get("LLM_MODEL"):
+        cfg.setdefault("llm", {})["model"] = os.environ["LLM_MODEL"]
+    if os.environ.get("LLM_MODEL_FALLBACKS"):
+        cfg.setdefault("llm", {})["model_fallbacks"] = [
+            m.strip() for m in os.environ["LLM_MODEL_FALLBACKS"].split(",") if m.strip()
+        ]
     return cfg
 
 

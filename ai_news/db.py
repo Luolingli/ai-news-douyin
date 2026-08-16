@@ -81,8 +81,9 @@ class DB:
         return dict(row) if row else None
 
     def get_new_items(self, limit: int = 50, sources: list[str] | None = None) -> list[dict]:
-        """取尚未生成草稿的条目（按抓取时间倒序）"""
-        sql = "SELECT i.* FROM items i LEFT JOIN posts p ON p.item_id = i.id WHERE p.id IS NULL"
+        """取尚未生成草稿的条目；deferred（LLM 暂不可用）的条目会重试（按抓取时间倒序）"""
+        sql = ("SELECT i.* FROM items i LEFT JOIN posts p ON p.item_id = i.id "
+               "AND p.status != 'deferred' WHERE p.id IS NULL")
         args: list[Any] = []
         if sources:
             sql += " AND i.source IN (" + ",".join("?" * len(sources)) + ")"

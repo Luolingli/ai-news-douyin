@@ -54,7 +54,7 @@ tests/                      # 离线测试（python tests/run_all.py）
 ## 完整配置步骤
 
 1. **内容源**：编辑 `config.yaml`，详见 [docs/content_sources.md](docs/content_sources.md)（默认已启用 Telegram 频道 + Google News，开箱即可跑）
-2. **DeepSeek**：`.env` 填 `DEEPSEEK_API_KEY`（https://platform.deepseek.com 创建）
+2. **LLM（总结/检测）**：`.env` 填 `DEEPSEEK_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL`。免费方案：ModelScope（modelscope.cn 拿 key，`LLM_BASE_URL=https://api-inference.modelscope.cn/v1`，模型如 `deepseek-ai/DeepSeek-V4-Flash-0731`，可用 `LLM_MODEL_FALLBACKS` 配备用模型应对限流）；或 DeepSeek 官方（platform.deepseek.com）。限流时流水线自动标记 deferred 下轮重试，不会发布劣质文案
 3. **抖音发布**：个人账号走网页版路线（推荐）——`python main.py douyin web login` 扫码一次，之后自动复用 keepalive cookies；有企业资质可走 API 路线，见 [docs/douyin_open_platform_setup.md](docs/douyin_open_platform_setup.md)
 4. **定时运行**（二选一）：
    - **GitHub Actions 云端自动**（推荐）：在仓库 Settings → Secrets and variables → Actions 配置 `DOUYIN_WEB_COOKIES_B64`（本地 `data/web_cookies.json` 的 base64，命令见下）和 `DEEPSEEK_API_KEY`，可选 `AI_NEWS_PAT`（cookies 自动回写续期）。之后每 4 小时自动抓取+发布，无需开电脑：
