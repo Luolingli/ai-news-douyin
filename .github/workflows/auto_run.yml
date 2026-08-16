@@ -1,5 +1,6 @@
 # AI 新闻自动搬运（云端）
-# 个人账号网页版路线：cookies 从 secret 解码 → Playwright 无头浏览器发布图文 → 成功后回写最新 cookies
+# 个人账号网页版路线：cookies 从 secret 解码 → Playwright 无头浏览器发布图文 → 回写最新 cookies
+# 状态持久化：上次运行的 data/app.db 作为 artifact 下载/上传，保证跨运行去重
 name: AI News Auto Run
 
 on:
@@ -12,6 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download previous state (dedup DB)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: app-state
+          path: data
 
       - uses: actions/setup-python@v5
         with:
@@ -36,6 +44,7 @@ jobs:
           mkdir -p data
           echo "$DOUYIN_WEB_COOKIES_B64" | tr -d '\n' | base64 -d > data/web_cookies.json
           echo "cookies bytes: $(wc -c < data/web_cookies.json)"
+          ls -la data/
         env:
           DOUYIN_WEB_COOKIES_B64: ${{ secrets.DOUYIN_WEB_COOKIES_B64 }}
 
@@ -54,6 +63,15 @@ jobs:
           path: |
             data/logs/screenshots/
             data/logs/app.log
+
+      - name: Upload state (dedup DB)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-state
+          path: data/app.db
+          retention-days: 90
+          overwrite: true
 
       - name: Refresh cookies back to secret
         if: always()

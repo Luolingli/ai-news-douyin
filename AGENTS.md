@@ -28,7 +28,7 @@ AI 新闻自动搬运流水线：抓取（Telegram 频道 / Google News / RSSHub
 ## 4. 验证方式
 
 ```bash
-.venv/bin/python tests/run_all.py          # 17 个离线测试（解析/检测/去重/封面/DB/流水线）
+.venv/bin/python tests/run_all.py          # 24 个离线测试（解析/检测/去重/封面/DB/流水线/发布器）
 .venv/bin/python main.py run --dry-run --skip-llm --limit 3   # 真网冒烟（不发布）
 .venv/bin/python main.py drafts            # 看处理记录
 ```
