@@ -12,6 +12,7 @@ MODULES = [
     "test_detection",
     "test_llm",
     "test_cover",
+    "test_editorial_cover",
     "test_db",
     "test_cookies",
     "test_webpublisher",

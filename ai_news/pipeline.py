@@ -14,7 +14,7 @@ from .crawlers.base import fetch_article_text
 from .db import DB
 from .detection import check_sensitive, decide, is_duplicate
 from .llm import LLMClient, SYSTEM_PROMPT, build_user_prompt, fallback_summarize, sanitize_hashtags
-from .media import download_image, generate_cover
+from .media import download_image, generate_cover, generate_editorial_cover
 from .publisher import DouyinOpenClient, TokenStore
 
 log = logging.getLogger("ai_news.pipeline")
@@ -186,6 +186,7 @@ class Pipeline:
 
         title_raw = str(result.get("title") or "").strip()
         title = title_raw[: int(llm_cfg.get("max_title_len", 20))]
+        subtitle = str(result.get("subtitle") or "").strip()[:24]
         # 智能截断：若在中文词中间切断（前后都是汉字），去掉残字，避免「…安全担」
         if len(title_raw) > len(title) and len(title) >= 2:
             last, prev = title[-1], title[-2]
@@ -205,8 +206,12 @@ class Pipeline:
         if get(media_cfg, "cover.enabled", True):
             cover_path = img_dir / "cover.png"
             source_label = item.get("author") or item.get("source") or "AI News"
-            ok = generate_cover(title, source_label, (item.get("published_at") or "")[:10],
-                               cover_path, get(media_cfg, "cover", {}))
+            date_str = (item.get("published_at") or "")[:10]
+            cover_cfg = get(media_cfg, "cover", {})
+            ok = generate_editorial_cover(title, subtitle, source_label, date_str, cover_path,
+                                          cover_cfg, metaphor_text=title + " " + body)
+            if not ok:
+                ok = generate_cover(title, source_label, date_str, cover_path, cover_cfg)
             if ok:
                 images.append(str(cover_path))
         if get(media_cfg, "download_images", True):

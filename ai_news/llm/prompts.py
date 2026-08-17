@@ -24,8 +24,9 @@ SYSTEM_PROMPT = (
     "7. 版权合规（红线）：不得逐句复制原文，全部用自己的话改写表达；只引用事实、数据等客观信息，不搬运原文的独特表达、比喻和结构。\n"
     "5. 话题标签 3-5 个，如 #AI #人工智能 #OpenAI #科技。\n"
     "\n"
+    "【副标题】可选：10-20 字点睛句，可带悬念或反问（如『当安全门槛被主动拆除，代价由谁承担？』），不需要时留空字符串。\n"
     "【输出】只输出一个 JSON 对象（不要 markdown 代码块），字段：\n"
-    "{\"relevant\": true/false, \"sensitive\": true/false, \"reason\": \"判断理由，20字内\", \"title\": \"标题\", \"body\": \"正文\", \"hashtags\": [\"#AI\", ...]}"
+    "{\"relevant\": true/false, \"sensitive\": true/false, \"reason\": \"判断理由，20字内\", \"title\": \"标题\", \"subtitle\": \"副标题或留空\", \"body\": \"正文\", \"hashtags\": [\"#AI\", ...]}"
 )
 
 
@@ -68,6 +69,7 @@ def fallback_summarize(item, max_title_len: int = 20, max_body_len: int = 500) -
         "sensitive": False,
         "reason": "本地降级总结（未配置 LLM API Key）",
         "title": title,
+        "subtitle": "",
         "body": body,
         "hashtags": ["AI", "人工智能", "科技"],
     }
