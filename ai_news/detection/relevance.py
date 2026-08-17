@@ -16,6 +16,13 @@ STRONG_KEYWORDS = [
     "rag", "fine-tuning", "fine tuning", "rlhf", "量化模型", "开源模型", "本地模型",
     "gpu集群", "ai芯片", "nvidia", "英伟达", "h100", "b200", "a100", "昇腾", "寒武纪",
     "自动驾驶", "robotaxi", "humanoid", "具身智能", "机器人",
+    # 用户偏好主题：新模型发布 / 泄露 / benchmark 跑分 / AI数学 / AI金融
+    "benchmark", "benchmarks", "mmlu", "gpqa", "humaneval", "swe-bench", "swebench",
+    "arena", "elo", "跑分", "基准测试", "得分", "评测", "排名", "榜首",
+    "leak", "leaked", "泄露", "权重泄露", "模型泄露", "开源权重",
+    "theorem", "定理", "proof", "证明", "olympiad", "奥数", "imo", "math benchmark",
+    "数学推理", "quant", "量化交易", "hedge fund", "对冲基金", "fintech", "ai finance",
+    "金融大模型", "交易模型", "量化投资",
 ]
 
 # 弱信号：语境词，与强信号叠加计分
