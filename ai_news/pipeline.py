@@ -241,7 +241,7 @@ class Pipeline:
             return {"post_id": post_id, "status": "failed", "reason": reason}
 
         # 6) 发布
-        text_full = self._compose_text(title, body, hashtags)
+        text_full = self._compose_text(title, body, hashtags, source_label)
         post_id = self.db.add_post(item_id, title=title, body=body, hashtags=hashtags,
                                    images=images, status="ready")
         if dry_run or not self.publisher:
@@ -270,10 +270,12 @@ class Pipeline:
             log.error("[发布失败] %s: %s", title, e)
             return {"post_id": post_id, "status": "failed", "title": title, "error": str(e)}
 
-    def _compose_text(self, title: str, body: str, hashtags: list[str]) -> str:
+    def _compose_text(self, title: str, body: str, hashtags: list[str], source: str = "") -> str:
         prefix = get(self.cfg, "douyin.text_prefix", "") or ""
         footer = get(self.cfg, "llm.ai_footer", "") or ""
         parts = [prefix, title, body]
+        if source:
+            parts.append("来源：" + source)
         if footer:
             parts.append(footer)
         if hashtags:

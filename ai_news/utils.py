@@ -26,7 +26,11 @@ def publish_ready(pipeline, dry_run: bool = False, limit: int = 10) -> dict:
     for p in posts:
         images = json.loads(p.get("images") or "[]")
         hashtags = json.loads(p.get("hashtags") or "[]")
-        text = pipeline._compose_text(p.get("title", ""), p.get("body", ""), hashtags)
+        src = ""
+        it = pipeline.db.get_item(p.get("item_id") or 0)
+        if it:
+            src = it.get("author") or it.get("source") or ""
+        text = pipeline._compose_text(p.get("title", ""), p.get("body", ""), hashtags, src)
         try:
             if dry_run or not pipeline.publisher:
                 log.info("[dry-run] 草稿 %d 将发布: %s", p["id"], p.get("title"))

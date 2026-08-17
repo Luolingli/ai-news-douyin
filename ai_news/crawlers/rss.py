@@ -20,6 +20,9 @@ class RssSource(Source):
         except Exception as e:
             raise SourceError(f"RSS 抓取失败: {e}") from e
         feed = feedparser.parse(xml)
+        feed_title = (feed.feed.get("title") or "").strip()
+        if " | " in feed_title:
+            feed_title = feed_title.split(" | ")[-1].strip()
         items = []
         for entry in feed.entries[: self.max_items]:
             media = []
@@ -36,7 +39,7 @@ class RssSource(Source):
                 source_type=self.type,
                 source_id=entry.get("id", "") or entry.get("link", ""),
                 url=entry.get("link", ""),
-                author=(entry.get("author") or ""),
+                author=(feed_title or entry.get("author") or ""),
                 title=entry.get("title", ""),
                 text=strip_html(entry.get("summary", "") or entry.get("description", "")),
                 published_at=entry.get("published", ""),
