@@ -83,5 +83,6 @@ def test_compose_text_with_footer():
     t = pipe._compose_text("标题示例二十个字内", "正文内容比较详细的一段话。", ["AI", "人工智能"])
     assert "AI 转录" in t, t
     assert "#AI" in t and "#人工智能" in t
+    assert t.rstrip().endswith("#人工智能") and t.endswith(" "), repr(t[-20:])
     assert t.startswith("标题示例") and "正文内容" in t
     db.close()

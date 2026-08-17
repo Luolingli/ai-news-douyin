@@ -269,7 +269,8 @@ class Pipeline:
         if footer:
             parts.append(footer)
         if hashtags:
-            parts.append(" ".join("#" + t for t in hashtags))
+            # 末尾补空格：抖音编辑器靠标签后的空格触发话题转换，否则最后一个标签会残留为正文
+            parts.append(" ".join("#" + t for t in hashtags) + " ")
         text = "\n\n".join(p for p in parts if p)
         return text[:1000]
 

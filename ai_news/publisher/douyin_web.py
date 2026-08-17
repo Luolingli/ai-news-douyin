@@ -341,6 +341,7 @@ class DouyinWebPublisher:
         """等待发布结果：错误提示优先；成功只看明确 toast；跳转管理页后再观察 15s 防延迟弹错"""
         deadline = time.time() + 90
         jumped_at: float | None = None
+        sms_wait_start: float | None = None
         while True:
             page.wait_for_timeout(3000)
             url = page.url
@@ -369,6 +370,20 @@ class DouyinWebPublisher:
                     result["message"] = "发布成功"
                     self._snapshot(page, "publish_ok")
                     return True
+            # 2.5) 短信/手机验证码（软验证）：等待用户在弹出的浏览器里手动输入，最多 3 分钟
+            if ("验证码" in body or "短信" in body) and ("输入" in body or "填写" in body):
+                if sms_wait_start is None:
+                    sms_wait_start = time.time()
+                    result["message"] = "触发手机验证码验证：请在浏览器窗口手动输入验证码"
+                    log.warning("触发短信验证码，等待用户手动输入（最多 180s）...")
+                    self._snapshot(page, "publish_sms_verify")
+                if time.time() - sms_wait_start > 180:
+                    result["message"] = "短信验证码等待超时（180s 未输入），已中止"
+                    self._snapshot(page, "publish_sms_timeout")
+                    return False
+                deadline = time.time() + 60  # 验证通过后延长观察窗口
+            else:
+                sms_wait_start = None
             # 3) 跳转到内容管理页：连续 15s 无失败提示才算成功（防延迟弹错）
             if "content/manage" in url:
                 if jumped_at is None:
