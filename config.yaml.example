@@ -3,42 +3,12 @@ data_dir: data          # SQLite 数据库与图片输出目录
 log_level: INFO
 timezone: Asia/Shanghai
 
-# ===== 内容源（按顺序抓取，多源自动合并去重）=====
-sources:
-  - type: tme                  # Telegram 频道预览页（免登录，稳定）
-    name: tg_ai_news
-    channel: AI_News_Official  # https://t.me/s/AI_News_Official
-    enabled: true
-    max_items: 20
+# ===== 全局 =====
+data_dir: data          # SQLite 数据库与图片输出目录
+log_level: INFO
+timezone: Asia/Shanghai
 
-  - type: googlenews           # Google News 关键词搜索 RSS（免登录，稳定）
-    name: google_ai
-    query: '"OpenAI" OR "Anthropic" OR "Google DeepMind" OR "Meta AI" OR "大模型"'
-    lang: en-US
-    enabled: true
-    max_items: 20
-
-  - type: rss                  # 任意自定义 RSS（如自建 RSSHub 输出）
-    name: my_rss
-    url: https://example.com/feed.xml
-    enabled: false
-    max_items: 20
-
-  - type: rsshub_twitter       # 自建 RSSHub 的 Twitter 路由（需要自己部署实例）
-    name: twitter_via_rsshub
-    base_url: http://localhost:1200
-    accounts: [OpenAI, AnthropicAI, GoogleDeepMind, MetaAI, karpathy]
-    enabled: false
-    max_items: 50
-
-  - type: twitter_x            # X.com 直抓（需自备 cookies，实验性）
-    name: twitter_x
-    accounts: [OpenAI, AnthropicAI]
-    cookies_path: ""
-    enabled: false
-    max_items: 50
-
-# ===== 内容源（多源并行，自动去重；全部为免登录可用源）=====
+# ===== 内容源（多源并行，自动去重；全部为免登录可用源；已剔除在抖音有官方账号的源）=====
 sources:
   - type: rss
     name: openai_news
@@ -88,15 +58,9 @@ sources:
     enabled: true
     max_items: 10
 
-  - type: rss
-    name: qbitai
-    url: https://www.qbitai.com/feed
-    enabled: true
-    max_items: 10
-
   - type: googlenews
     name: google_ai
-    query: '"OpenAI" OR "Anthropic" OR "Google DeepMind" OR "Meta AI" OR "AI 融资" OR "大模型"'
+    query: '"OpenAI" OR "Anthropic" OR "Google DeepMind" OR "Meta AI"'   # 纯英文，避免混入抖音活跃的国内媒体
     lang: en-US
     enabled: true
     max_items: 15
