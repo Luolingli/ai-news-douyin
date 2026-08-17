@@ -4,6 +4,7 @@ from __future__ import annotations
 import glob
 import logging
 import os
+import random
 import re
 import time
 from pathlib import Path
@@ -58,15 +59,22 @@ class DouyinWebPublisher:
 
     # ---------- 基础 ----------
     def _new_context(self, playwright):
-        exe = find_browser_executable()
-        if exe:
-            log.info("使用浏览器: %s", exe)
-            browser = playwright.chromium.launch(headless=self.headless, executable_path=exe)
-        else:
-            log.warning("未找到 Chrome for Testing，尝试 playwright 自带浏览器（需 playwright install chromium）")
-            browser = playwright.chromium.launch(headless=self.headless)
+        # 优先用系统 Google Chrome（channel=chrome，指纹更接近真人）
+        try:
+            browser = playwright.chromium.launch(headless=self.headless, channel="chrome")
+            log.info("使用系统 Google Chrome (channel=chrome)")
+        except Exception:
+            exe = find_browser_executable()
+            if exe:
+                log.info("回退使用 Chrome for Testing: %s", exe)
+                browser = playwright.chromium.launch(headless=self.headless, executable_path=exe)
+            else:
+                log.warning("未找到可用浏览器，尝试 playwright 自带（需 playwright install chromium）")
+                browser = playwright.chromium.launch(headless=self.headless)
         ctx = browser.new_context(timezone_id="Asia/Shanghai", viewport={"width": 1440, "height": 900},
                                  locale="zh-CN")
+        # 清除自动化指纹
+        ctx.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         cookies = load_cookies(self.cookies_path)
         if cookies:
             ctx.add_cookies(cookies)
@@ -74,6 +82,12 @@ class DouyinWebPublisher:
         else:
             log.warning("未加载到 cookies（%s），需要登录", self.cookies_path or "未配置")
         return browser, ctx
+
+    def _human_pause(self, min_s: float = 2, max_s: float = 8, reason: str = "") -> None:
+        """模拟真人思考的随机停顿，降低机器操作特征"""
+        secs = random.uniform(min_s, max_s)
+        log.info("拟人停顿 %.1fs%s", secs, (" (" + reason + ")") if reason else "")
+        time.sleep(secs)
 
     def _is_logged_in(self, page) -> bool:
         try:
@@ -226,6 +240,7 @@ class DouyinWebPublisher:
             try:
                 fn()
                 page.wait_for_timeout(1500)
+                self._human_pause(1, 3, "切换页签后")
                 return
             except Exception as e:
                 last_err = e
@@ -260,6 +275,7 @@ class DouyinWebPublisher:
             if imgs.count() >= len(image_paths) and "上传中" not in body:
                 log.info("图片上传完成（预览 %d 张）", imgs.count())
                 page.wait_for_timeout(1500)
+                self._human_pause(2, 5, "上传完成后")
                 return
         raise RuntimeError("等待图片上传完成超时")
 
@@ -278,6 +294,7 @@ class DouyinWebPublisher:
         ce.click()
         page.keyboard.type(rest or title, delay=3)
         page.wait_for_timeout(800)
+        self._human_pause(2, 5, "填写正文后")
         log.info("正文已填写（%d 字）", len(rest or title))
     def _add_topics(self, page, text: str) -> None:
         """话题已在正文中通过 # 自动转为标签；这里校验数量并记录（失败不阻断）"""
@@ -291,7 +308,8 @@ class DouyinWebPublisher:
         except Exception as e:
             log.warning("话题校验失败（不影响发布）: %s", e)
     def _click_publish(self, page) -> None:
-        """点击发布按钮（含二次确认弹窗）"""
+        """点击发布按钮（含二次确认弹窗）；点击前拟人停顿"""
+        self._human_pause(3, 8, "发布前检查")
         attempts = [
             lambda: page.get_by_role("button", name=re.compile(r"^发布$")).first.click(timeout=8000),
             lambda: page.get_by_role("button", name=re.compile(r"发布作品")).first.click(timeout=8000),

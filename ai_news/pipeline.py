@@ -284,4 +284,8 @@ class Pipeline:
             s = res.get("status", "skipped")
             if s in stats:
                 stats[s] += 1
+            # 安全验证墙：本轮立即中止，防止连续触发风控
+            if s == "failed" and "验证" in str(res.get("reason", "")) + str(res.get("error", "")):
+                log.error("检测到抖音安全验证墙，中止本轮剩余发布（防加重风控）")
+                break
         return stats
