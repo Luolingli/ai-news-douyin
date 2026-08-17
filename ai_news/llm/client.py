@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -56,6 +57,10 @@ class LLMClient:
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self.timeout = timeout
+        # 自适应健康度：记录每个模型近期成败，动态调整尝试顺序（应对免费档波动）
+        self._health: dict[str, float] = {}
+        self._health_file = Path("data/llm_health.json")
+        self._load_health()
         # 无 key 时不构造客户端（SDK 会拒绝空 key），available=False 走本地降级
         self._client = (
             OpenAI(api_key=api_key, base_url=self.base_url, timeout=timeout, max_retries=max_retries)
@@ -80,22 +85,58 @@ class LLMClient:
         }
         timeout = timeout or self.timeout
         last_err: Exception | None = None
-        for idx, model in enumerate(self.models):
-            log.info("LLM 尝试模型 %s (%d/%d)", model, idx + 1, len(self.models))
+        # 按健康度排序（得分相同保持配置顺序，稳定排序）
+        ordered = sorted(self.models, key=lambda m: -self._health.get(m, 0.0))
+        log.info("模型尝试顺序(按健康度): %s", " > ".join(ordered))
+        for idx, model in enumerate(ordered):
+            log.info("LLM 尝试模型 %s (%d/%d) 健康度=%.1f", model, idx + 1, len(ordered), self._health.get(model, 0.0))
             try:
-                return self._call_model(model, payload, json_mode=True, timeout=timeout)
+                r = self._call_model(model, payload, json_mode=True, timeout=timeout)
+                self._bump(model, 2.0)
+                return r
+            except EmptyResponseError as e:
+                self._bump(model, -3.0)
+                last_err = e
+                log.warning("模型 %s 空响应，健康度下降: %s", model, str(e)[:100])
             except Exception as e:
+                self._bump(model, -1.0)
                 last_err = e
                 if "400" in str(e) or "response_format" in str(e).lower():
                     log.warning("response_format 不受支持，降级重试: %s", str(e)[:120])
                     try:
-                        return self._call_model(model, payload, json_mode=False, timeout=timeout)
+                        r2 = self._call_model(model, payload, json_mode=False, timeout=timeout)
+                        self._bump(model, 2.0)
+                        return r2
+                    except EmptyResponseError as e2:
+                        self._bump(model, -3.0)
+                        last_err = e2
                     except Exception as e2:
+                        self._bump(model, -1.0)
                         last_err = e2
                 log.warning("模型 %s 失败: %s", model, str(last_err)[:150])
-                if idx < len(self.models) - 1:
+                if idx < len(ordered) - 1:
                     time.sleep(self.backoff_base)
         raise RuntimeError(f"LLM 所有模型均失败: {last_err}")
+
+    def _load_health(self) -> None:
+        try:
+            if self._health_file.exists():
+                self._health = json.loads(self._health_file.read_text(encoding="utf-8"))
+        except Exception:
+            self._health = {}
+
+    def _save_health(self) -> None:
+        try:
+            self._health_file.parent.mkdir(parents=True, exist_ok=True)
+            self._health_file.write_text(json.dumps(self._health, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _bump(self, model: str, delta: float) -> None:
+        """更新模型健康度（范围 -10 ~ 10），并持久化"""
+        cur = self._health.get(model, 0.0)
+        self._health[model] = max(-10.0, min(10.0, cur + delta))
+        self._save_health()
 
     def _call_model(self, model: str, payload: dict, json_mode: bool, timeout: int) -> dict:
         kwargs: dict = {

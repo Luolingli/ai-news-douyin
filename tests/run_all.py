@@ -11,6 +11,7 @@ MODULES = [
     "test_googlenews",
     "test_detection",
     "test_llm",
+    "test_llm_health",
     "test_cover",
     "test_editorial_cover",
     "test_html_cover",
