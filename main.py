@@ -74,6 +74,15 @@ def cmd_loop(args) -> int:
     return 0
 
 
+def cmd_draft(args) -> int:
+    """只生成草稿并通知（B 方案：用户用抖音 APP 手动发布，避开网页验证码）"""
+    cfg, db, pipe = _load()
+    stats = pipe.run(limit=args.limit, dry_run=True, skip_llm=args.skip_llm)
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+    db.close()
+    return 0
+
+
 def cmd_crawl(args) -> int:
     cfg, db, pipe = _load()
     new_ids = pipe.crawl(sources_filter=args.sources.split(",") if args.sources else None)
@@ -297,6 +306,11 @@ def main() -> int:
 
     p = sub.add_parser("init", help="生成 config.yaml")
     p.set_defaults(fn=cmd_init)
+
+    p = sub.add_parser("draft", help="只生成草稿并推送通知（APP 手动发布模式）")
+    p.add_argument("--limit", type=int, default=1)
+    p.add_argument("--skip-llm", action="store_true")
+    p.set_defaults(fn=cmd_draft)
 
     p = sub.add_parser("run", help="跑一轮完整流水线")
     p.add_argument("--limit", type=int, default=5)

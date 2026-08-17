@@ -244,6 +244,11 @@ class Pipeline:
         text_full = self._compose_text(title, body, hashtags, source_label)
         post_id = self.db.add_post(item_id, title=title, body=body, hashtags=hashtags,
                                    images=images, status="ready")
+        # 草稿就绪通知（B 方案：用户手机 APP 手动发布）
+        try:
+            self._notify_draft(post_id, title, body, hashtags, source_label, images)
+        except Exception as e:
+            log.warning("草稿通知失败: %s", e)
         if dry_run or not self.publisher:
             log.info("[dry-run/未配置发布] 待发布: %s | %s", title, item["url"])
             return {"post_id": post_id, "status": "ready", "title": title}
@@ -269,6 +274,27 @@ class Pipeline:
             self.db.update_post(post_id, status="failed", error=str(e)[:500])
             log.error("[发布失败] %s: %s", title, e)
             return {"post_id": post_id, "status": "failed", "title": title, "error": str(e)}
+
+    def _notify_draft(self, post_id: int, title: str, body: str, hashtags: list[str],
+                      source: str, images: list[str]) -> None:
+        """通知用户草稿已就绪，可到抖音 APP 手动发布（B 方案）"""
+        from .notify import notify
+
+        desp_lines = [
+            f"草稿 #{post_id} 已就绪，可在抖音 APP 手动发布（APP 发布无需验证码）",
+            "",
+            f"标题：{title}",
+            f"来源：{source}",
+            f"话题：{' '.join('#' + t for t in hashtags)}",
+            "",
+            "正文：",
+            (body or "")[:800],
+            "",
+            f"封面图：{images[0] if images else '（无，APP 选一张图）'}",
+            "",
+            "发布步骤：打开抖音 APP → 右下角+ → 图文 → 粘贴标题/正文/话题，上传封面 → 发布",
+        ]
+        notify("AI 快讯草稿就绪", "\n".join(desp_lines))
 
     def _compose_text(self, title: str, body: str, hashtags: list[str], source: str = "") -> str:
         prefix = get(self.cfg, "douyin.text_prefix", "") or ""
