@@ -139,7 +139,7 @@ detection:
 llm:
   model: deepseek-chat
   temperature: 0.4
-  max_title_len: 20            # 标题最大字数（抖音上限 20）
+  max_title_len: 10            # 标题最大字数（英文字母逐个计数，宁短勿超）
   max_body_len: 800            # 正文最大字数（深度模式）
   ai_footer: "—— 本文由 AI 转录整理，仅供参考 ——"   # 文末 AI 生成标识，留空则不加
   max_hashtags: 5

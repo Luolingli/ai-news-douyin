@@ -14,10 +14,12 @@ from .crawlers.base import fetch_article_text
 from .db import DB
 from .detection import check_sensitive, decide, is_duplicate
 from .llm import LLMClient, SYSTEM_PROMPT, build_user_prompt, fallback_summarize, sanitize_hashtags
-from .media import download_image, generate_cover, generate_editorial_cover
+from .media import download_image, generate_cover, generate_editorial_cover, generate_html_cover
 from .publisher import DouyinOpenClient, TokenStore
 
 log = logging.getLogger("ai_news.pipeline")
+
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def _parse_time(s: str):
@@ -206,12 +208,18 @@ class Pipeline:
         if get(media_cfg, "cover.enabled", True):
             cover_path = img_dir / "cover.png"
             source_label = item.get("author") or item.get("source") or "AI News"
-            date_str = (item.get("published_at") or "")[:10]
+            # 封面日期用发布日（北京时间），英文月份全称如 Aug 17, 2026
+            pub_dt = datetime.now(timezone(timedelta(hours=8)))
+            cover_date = MONTHS[pub_dt.month - 1] + " " + str(pub_dt.day) + ", " + str(pub_dt.year)
             cover_cfg = get(media_cfg, "cover", {})
-            ok = generate_editorial_cover(title, subtitle, source_label, date_str, cover_path,
-                                          cover_cfg, metaphor_text=title + " " + body)
+            metaphor_text = title + " " + body
+            ok = generate_html_cover(title, subtitle, source_label, cover_date, cover_path,
+                                     cover_cfg, metaphor_text=metaphor_text)
             if not ok:
-                ok = generate_cover(title, source_label, date_str, cover_path, cover_cfg)
+                ok = generate_editorial_cover(title, subtitle, source_label, cover_date, cover_path,
+                                              cover_cfg, metaphor_text=metaphor_text)
+            if not ok:
+                ok = generate_cover(title, source_label, cover_date, cover_path, cover_cfg)
             if ok:
                 images.append(str(cover_path))
         if get(media_cfg, "download_images", True):
